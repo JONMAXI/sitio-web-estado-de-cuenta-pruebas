@@ -35,7 +35,7 @@ body { background-color: #f8f9fa; }
     background:#fff; 
     min-height: 800px; 
     max-height: none; 
-    overflow-y: auto; 
+    overflow: auto; /* scroll horizontal y vertical */
 }
 
 canvas {
@@ -44,8 +44,6 @@ canvas {
     display:block; 
     margin-left:auto; 
     margin-right:auto;
-    width: 100% !important;
-    height: auto !important;
 }
 
 .controls { 
@@ -111,6 +109,7 @@ img.documento-imagen {
                         <select id="tipoDocumento" class="form-select" required>
                             <option value="INE">INE (Frente + Reverso)</option>
                             <option value="Contrato">Contrato</option>
+                            <option value="Factura">Factura</option>
                         </select>
                     </div>
                     <button type="submit" class="btn btn-custom w-100 mt-3">Buscar Documento</button>
@@ -121,7 +120,7 @@ img.documento-imagen {
 
     <!-- Visor de Documento -->
     <div class="row justify-content-center">
-        <div class="col-md-8" id="visorContainer" style="display:none;">
+        <div class="col-12" id="visorContainer" style="display:none;">
             <div class="card card-custom">
                 <h3 class="text-center mb-4">Visor de Documento</h3>
 
@@ -175,7 +174,7 @@ function drawWatermark(ctx, width, height, text = "SIN VALOR") {
     ctx.restore();
 }
 
-// Render PDF con zoom funcional
+// Render PDF con zoom funcional y scroll
 async function renderPdf(blob) {
     if(!currentPdf){
         currentPdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -192,8 +191,8 @@ async function renderPdf(blob) {
 
         canvas.width = viewport.width * ratio;
         canvas.height = viewport.height * ratio;
-        canvas.style.width = viewport.width + 'px';
-        canvas.style.height = viewport.height + 'px';
+        canvas.style.width = viewport.width * scale + 'px';
+        canvas.style.height = viewport.height * scale + 'px';
 
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
@@ -221,15 +220,15 @@ function renderImageWithWatermark(blob) {
     };
 }
 
-// Zoom buttons
+// Zoom buttons con límites
 document.getElementById('zoomIn').onclick = () => { 
-    if(currentBlob){ 
+    if(currentBlob && scale < 5){ 
         scale *= 1.2;
         renderPdf(currentBlob); 
     } 
 };
 document.getElementById('zoomOut').onclick = () => { 
-    if(currentBlob){ 
+    if(currentBlob && scale > 0.5){  
         scale /= 1.2;
         renderPdf(currentBlob); 
     } 
@@ -252,20 +251,20 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
         if (!res.ok) throw new Error(await res.text());
         const blob = await res.blob();
         currentBlob = blob;
-        currentPdf = null; // fuerza nuevo renderizado
+        currentPdf = null;
 
         if(tipo === 'INE'){
-    scale = 1.0;
-    await renderPdf(blob);
-} else if(tipo === 'Contrato'){
-    scale = 3.0; // máxima resolución para Contrato
-    await renderPdf(blob);
-} else if(tipo === 'Factura'){
-    scale = 2.0; // resolución intermedia para Factura
-    await renderPdf(blob);
-} else {
-    renderImageWithWatermark(blob);
-}
+            scale = 1.0;
+            await renderPdf(blob);
+        } else if(tipo === 'Contrato'){
+            scale = 3.0;
+            await renderPdf(blob);
+        } else if(tipo === 'Factura'){
+            scale = 2.0;
+            await renderPdf(blob);
+        } else {
+            renderImageWithWatermark(blob);
+        }
     } catch(err){
         Swal.fire({ icon:'error', title:'Error', text: err.message });
         document.getElementById('visorContainer').style.display = 'none';
