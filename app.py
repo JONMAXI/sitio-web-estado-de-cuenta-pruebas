@@ -106,7 +106,7 @@ def procesar_estado_cuenta(estado_cuenta):
 
         pagos_list = []
 
-        # Preparar pagos
+        # Preparar los pagos
         for p in pagos:
             monto_pago = safe_float(p.get("montoPago"), 0.0)
             extemporaneos = safe_float(p.get("extemporaneos"), 0.0)
@@ -121,9 +121,10 @@ def procesar_estado_cuenta(estado_cuenta):
                 "fechaRegistro": p.get("fechaRegistro"),
                 "montoPagoOriginal": monto_pago,
                 "extemporaneos": extemporaneos,
-                "_extemporaneo_aplicado": False  # marcador para evitar duplicados
+                "_extemporaneo_aplicado": False  # marcar si ya se aplicó gasto
             })
 
+        # Ordenar cargos
         cargos_sorted = sorted(cargos, key=lambda c: safe_int(c.get("idCargo"), 0))
         tabla = []
 
@@ -142,8 +143,8 @@ def procesar_estado_cuenta(estado_cuenta):
             monto_restante_cargo = monto_cargo
             aplicados = []
 
-            # Solo pagos correspondientes a esta cuota
             for pago in pagos_list:
+                # Solo pagos que incluyen esta cuota
                 if cuota_num not in pago["cuotas"]:
                     continue
 
@@ -162,19 +163,18 @@ def procesar_estado_cuenta(estado_cuenta):
                     pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
                     monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
 
-                # Registro de gasto de cobranza **solo en la última cuota del pago**
+                # Registrar gasto de cobranza solo en la **primera cuota** que recibe el pago
                 if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
-                    if cuota_num == max(pago["cuotas"]):
-                        aplicados.append({
-                            "idPago": pago.get("idPago"),
-                            "montoPago": round(pago["extemporaneos"], 2),
-                            "aplicado": round(pago["extemporaneos"], 2),
-                            "fechaRegistro": pago.get("fechaRegistro"),
-                            "fechaPago": fecha_venc,
-                            "diasMora": None,
-                            "extemporaneos": pago.get("extemporaneos", 0.0)
-                        })
-                        pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
+                    aplicados.append({
+                        "idPago": pago.get("idPago"),
+                        "montoPago": round(pago["extemporaneos"], 2),
+                        "aplicado": round(pago["extemporaneos"], 2),
+                        "fechaRegistro": pago.get("fechaRegistro"),
+                        "fechaPago": fecha_venc,
+                        "diasMora": None,
+                        "extemporaneos": pago.get("extemporaneos", 0.0)
+                    })
+                    pago["_extemporaneo_aplicado"] = True  # ya aplicado, no repetir
 
             total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
             pendiente = round(max(monto_cargo - total_aplicado, 0.0), 2)
@@ -199,7 +199,6 @@ def procesar_estado_cuenta(estado_cuenta):
     except Exception as e:
         print(f"[ERROR] procesar_estado_cuenta: {e}")
         return []
-
 # ------------------ BÚSQUEDA DE CRÉDITO ------------------
 def buscar_credito_por_nombre(nombre):
     db_clientes = os.environ.get('DB_NAME_CLIENTES')
