@@ -97,16 +97,18 @@ def auditar_documento(usuario, documento_clave, documento_nombre, id_referencia,
 # ------------------ PROCESAR ESTADO DE CUENTA ------------------
 def procesar_estado_cuenta(estado_cuenta):
     try:
+        # Obtenemos cargos y pagos del estado de cuenta
         cargos = estado_cuenta.get("datosCargos") or []
         if not isinstance(cargos, list):
             cargos = []
+
         pagos = estado_cuenta.get("datosPagos") or []
         if not isinstance(pagos, list):
             pagos = []
 
         pagos_list = []
 
-        # Preparamos los pagos
+        # ------------------ PREPARAR PAGOS ------------------
         for p in pagos:
             monto_pago = safe_float(p.get("montoPago"), 0.0)
             extemporaneos = safe_float(p.get("extemporaneos"), 0.0)
@@ -124,9 +126,11 @@ def procesar_estado_cuenta(estado_cuenta):
                 "_extemporaneo_aplicado": False  # marcador para evitar duplicados
             })
 
+        # ------------------ ORDENAR CARGOS ------------------
         cargos_sorted = sorted(cargos, key=lambda c: safe_int(c.get("idCargo"), 0))
         tabla = []
 
+        # ------------------ PROCESAR CADA CARGO ------------------
         for cargo in cargos_sorted:
             concepto = cargo.get("concepto", "")
             cuota_num = _extraer_numero_cuota(concepto)
@@ -136,18 +140,18 @@ def procesar_estado_cuenta(estado_cuenta):
             monto_cargo = safe_float(cargo.get("monto"))
             capital = safe_float(cargo.get("capital"))
             interes = safe_float(cargo.get("interes"))
-            seguro_total = sum(safe_float(cargo.get(k)) for k in ["seguroBienes","seguroVida","seguroDesempleo"])
+            seguro_total = sum(safe_float(cargo.get(k)) for k in ["seguroBienes", "seguroVida", "seguroDesempleo"])
             fecha_venc = cargo.get("fechaVencimiento")
 
             monto_restante_cargo = monto_cargo
             aplicados = []
 
-            # Solo pagos correspondientes a esta cuota
+            # ------------------ APLICAR PAGOS A LA CUOTA ------------------
             for pago in pagos_list:
                 if cuota_num not in pago["cuotas"]:
                     continue
 
-                # Aplicar monto real
+                # Aplicar monto real del pago
                 if monto_restante_cargo > 0 and pago["remaining"] > 0:
                     aplicar = min(pago["remaining"], monto_restante_cargo)
                     aplicados.append({
@@ -162,24 +166,17 @@ def procesar_estado_cuenta(estado_cuenta):
                     pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
                     monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
 
-                # Agregar gasto de cobranza al mismo pago visualmente
+                # Registrar extemporáneos solo una vez por pago
                 if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
-                    if aplicados:
-                        # Sumamos el extemporáneo al último aplicado para mostrarlo como un solo movimiento
-                        aplicados[-1]["montoPago"] += pago["extemporaneos"]
-                        aplicados[-1]["aplicado"] += pago["extemporaneos"]
-                        aplicados[-1]["extemporaneos"] = pago.get("extemporaneos", 0.0)
-                    else:
-                        # Si no hay aplicado aún, creamos uno
-                        aplicados.append({
-                            "idPago": pago.get("idPago"),
-                            "montoPago": round(pago["extemporaneos"], 2),
-                            "aplicado": round(pago["extemporaneos"], 2),
-                            "fechaRegistro": pago.get("fechaRegistro"),
-                            "fechaPago": fecha_venc,
-                            "diasMora": None,
-                            "extemporaneos": pago.get("extemporaneos", 0.0)
-                        })
+                    aplicados.append({
+                        "idPago": pago.get("idPago"),
+                        "montoPago": round(pago["extemporaneos"], 2),
+                        "aplicado": round(pago["extemporaneos"], 2),
+                        "fechaRegistro": pago.get("fechaRegistro"),
+                        "fechaPago": fecha_venc,
+                        "diasMora": None,
+                        "extemporaneos": pago.get("extemporaneos", 0.0)
+                    })
                     pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
 
             total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
