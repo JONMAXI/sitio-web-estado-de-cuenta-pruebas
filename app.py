@@ -142,27 +142,30 @@ def procesar_estado_cuenta(estado_cuenta):
             monto_restante_cargo = monto_cargo
             aplicados = []
 
-            # Solo pagos correspondientes a esta cuota
+            # Aplicamos cada pago a la cuota en un solo movimiento
             for pago in pagos_list:
                 if cuota_num not in pago["cuotas"]:
                     continue
 
-                # Aplicar monto real
-                if monto_restante_cargo > 0 and pago["remaining"] > 0:
-                    aplicar = min(pago["remaining"], monto_restante_cargo)
+                if pago["remaining"] > 0 and monto_restante_cargo > 0:
+                    aplicado_total = min(pago["remaining"], monto_restante_cargo)
+                    excedente = max(pago["remaining"] - monto_restante_cargo, 0.0)
+
                     aplicados.append({
                         "idPago": pago.get("idPago"),
                         "montoPago": round(pago["remaining"], 2),
-                        "aplicado": round(aplicar, 2),
+                        "aplicado": round(aplicado_total, 2),
                         "fechaRegistro": pago.get("fechaRegistro"),
                         "fechaPago": fecha_venc,
                         "diasMora": None,
-                        "extemporaneos": 0.0
+                        "extemporaneos": 0.0,
+                        "excedente": round(excedente, 2)
                     })
-                    pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
-                    monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
 
-                # Registro de gasto de cobranza **solo una vez por pago**
+                    monto_restante_cargo = max(monto_restante_cargo - aplicado_total, 0)
+                    pago["remaining"] = max(pago["remaining"] - aplicado_total, 0)
+
+                # Agregar gasto de cobranza solo una vez
                 if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
                     aplicados.append({
                         "idPago": pago.get("idPago"),
@@ -171,13 +174,14 @@ def procesar_estado_cuenta(estado_cuenta):
                         "fechaRegistro": pago.get("fechaRegistro"),
                         "fechaPago": fecha_venc,
                         "diasMora": None,
-                        "extemporaneos": pago.get("extemporaneos", 0.0)
+                        "extemporaneos": round(pago["extemporaneos"], 2),
+                        "excedente": 0.0
                     })
-                    pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
+                    pago["_extemporaneo_aplicado"] = True
 
             total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
             pendiente = round(max(monto_cargo - total_aplicado, 0.0), 2)
-            excedente = max(round(total_aplicado - monto_cargo, 2), 0.0)
+            excedente_total = round(sum(p["excedente"] for p in aplicados), 2)
 
             tabla.append({
                 "cuota": cuota_num,
@@ -189,7 +193,7 @@ def procesar_estado_cuenta(estado_cuenta):
                 "aplicados": aplicados,
                 "total_pagado": total_aplicado,
                 "pendiente": pendiente,
-                "excedente": excedente,
+                "excedente": excedente_total,
                 "raw_cargo": cargo
             })
 
