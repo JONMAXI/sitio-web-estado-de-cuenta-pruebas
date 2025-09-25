@@ -115,13 +115,13 @@ def procesar_estado_cuenta(estado_cuenta):
 
             pagos_list.append({
                 "idPago": p.get("idPago"),
-                "remaining": monto_real,  # solo para cálculos internos
+                "remaining": monto_real,
                 "cuotas": cuotas,
                 "fechaValor": p.get("fechaValor"),
                 "fechaRegistro": p.get("fechaRegistro"),
                 "montoPagoOriginal": monto_pago,
                 "extemporaneos": extemporaneos,
-                "_extemporaneo_aplicado": False
+                "_extemporaneo_aplicado": False  # marcador para evitar duplicados
             })
 
         cargos_sorted = sorted(cargos, key=lambda c: safe_int(c.get("idCargo"), 0))
@@ -147,24 +147,39 @@ def procesar_estado_cuenta(estado_cuenta):
                 if cuota_num not in pago["cuotas"]:
                     continue
 
-                # Aplicar monto real al cargo
+                # Aplicar monto real
                 if monto_restante_cargo > 0 and pago["remaining"] > 0:
                     aplicar = min(pago["remaining"], monto_restante_cargo)
-                    # Solo un pago visual, restando extemporáneos
                     aplicados.append({
                         "idPago": pago.get("idPago"),
-                        "montoPago": round(aplicar, 2),  # lo que se muestra
+                        "montoPago": round(pago["remaining"], 2),
                         "aplicado": round(aplicar, 2),
                         "fechaRegistro": pago.get("fechaRegistro"),
                         "fechaPago": fecha_venc,
                         "diasMora": None,
-                        "extemporaneos": 0.0  # no se muestra al cliente
+                        "extemporaneos": 0.0
                     })
                     pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
                     monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
 
-                # Internamente, seguimos teniendo extemporáneos pero no se muestran
+                # Agregar gasto de cobranza al mismo pago visualmente
                 if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
+                    if aplicados:
+                        # Sumamos el extemporáneo al último aplicado para mostrarlo como un solo movimiento
+                        aplicados[-1]["montoPago"] += pago["extemporaneos"]
+                        aplicados[-1]["aplicado"] += pago["extemporaneos"]
+                        aplicados[-1]["extemporaneos"] = pago.get("extemporaneos", 0.0)
+                    else:
+                        # Si no hay aplicado aún, creamos uno
+                        aplicados.append({
+                            "idPago": pago.get("idPago"),
+                            "montoPago": round(pago["extemporaneos"], 2),
+                            "aplicado": round(pago["extemporaneos"], 2),
+                            "fechaRegistro": pago.get("fechaRegistro"),
+                            "fechaPago": fecha_venc,
+                            "diasMora": None,
+                            "extemporaneos": pago.get("extemporaneos", 0.0)
+                        })
                     pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
 
             total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
@@ -190,7 +205,6 @@ def procesar_estado_cuenta(estado_cuenta):
     except Exception as e:
         print(f"[ERROR] procesar_estado_cuenta: {e}")
         return []
-
 
 
 # ------------------ BÚSQUEDA DE CRÉDITO ------------------
