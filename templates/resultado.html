@@ -92,34 +92,47 @@
 </div>
 
 
-            <!-- Datos de Referencias -->
-            <h5 class="section-title mt-4">Referencias</h5>
-            <table class="table table-bordered table-striped text-center align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>#</th>
-                        <th>Nombre</th>
-                        <th>Teléfono</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>1</td>
-                        <td>{{ datos.datosReferencias.nombre_completo_referencia1 or 'N/A' }}</td>
-                        <td>{{ datos.datosReferencias.telefono_referencia1 or 'N/A' }}</td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td>{{ datos.datosReferencias.nombre_completo_referencia2 or 'N/A' }}</td>
-                        <td>{{ datos.datosReferencias.telefono_referencia2 or 'N/A' }}</td>
-                    </tr>
-                    <tr>
-                        <td>3</td>
-                        <td>{{ datos.datosReferencias.nombre_referencia_3 or 'N/A' }}</td>
-                        <td>{{ datos.datosReferencias.telefono_referencia_3 or 'N/A' }}</td>
-                    </tr>
-                </tbody>
-            </table>
+   <!-- Datos de Referencias -->
+<h5 class="section-title mt-4">Referencias</h5>
+<table class="table table-bordered table-striped text-center align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th>#</th>
+            <th>Nombre</th>
+            <th>Teléfono</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set referencias = [] %}
+
+        {# Construir lista de referencias con nombre y teléfono #}
+        {% for i in range(1,6) %} {# puedes ajustar 6 por el máximo de referencias que maneje tu API #}
+            {% set nombre = datos.datosReferencias.get('nombre_completo_referencia' ~ i) 
+                            or datos.datosReferencias.get('nombre_referencia_' ~ i) %}
+            {% set telefono = datos.datosReferencias.get('telefono_referencia' ~ i) 
+                              or datos.datosReferencias.get('telefono_referencia_' ~ i) %}
+            {% if nombre or telefono %}
+                {% set _ = referencias.append({'num': i, 'nombre': nombre or 'N/A', 'telefono': telefono or 'N/A'}) %}
+            {% endif %}
+        {% endfor %}
+
+        {# Renderizar la tabla #}
+        {% for ref in referencias %}
+            <tr>
+                <td>{{ ref.num }}</td>
+                <td>{{ ref.nombre }}</td>
+                <td>{{ ref.telefono }}</td>
+            </tr>
+        {% endfor %}
+
+        {# Si no hay ninguna referencia #}
+        {% if referencias|length == 0 %}
+            <tr>
+                <td colspan="3">Sin referencias registradas</td>
+            </tr>
+        {% endif %}
+    </tbody>
+</table>
 
             <!-- Datos del cliente -->
             <h5 class="section-title">Datos del Cliente</h5>
