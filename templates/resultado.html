@@ -43,36 +43,54 @@
                 <a href="/" class="btn btn-custom">Nueva Consulta</a>
             </div>
 
-            <!-- Datos generales -->
-            <h5 class="section-title">Datos Generales</h5>
-            <div class="table-responsive">
-                <table class="table table-bordered table-striped text-center align-middle">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>ID Crédito</th>
-                            <th>Cuota</th>
-                            <th>Monto Otorgado</th>
-                            <th>Fecha Inicio</th>
-                            <th>Primer Vencimiento</th>
-                            <th>Último Vencimiento</th>
-                            <th>Status Crédito</th>
-                            <th>Referencia STP</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>{{ datos.idCredito }}</td>
-                            <td>${{ datos.cuota }}</td>
-                            <td>${{ "{:,.2f}".format(datos.montoOtorgado) }}</td>
-                            <td>{{ datos.fechaInicio }}</td>
-                            <td>{{ datos.primerVencimiento }}</td>
-                            <td>{{ datos.ultimoVencimiento }}</td>
-                            <td>{{ datos.statusCredito }}</td>
-                            <td>{{ datos.referenciaSTP }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+           <!-- Datos generales -->
+<h5 class="section-title">Datos Generales</h5>
+<div class="table-responsive">
+    <table class="table table-bordered table-striped text-center align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>ID Crédito</th>
+                <th>Cuota</th>
+                <th>Monto Otorgado</th>
+                <th>Fecha Inicio</th>
+                <th>Primer Vencimiento</th>
+                <th>Último Vencimiento</th>
+                <th>Status Crédito</th>
+                <th>Referencia STP</th>
+                {% if datos.datosSaldos.saldoParaLiquidar < 0 %}
+                    <th>Saldo a Favor</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ datos.idCredito }}</td>
+                <td>${{ datos.cuota }}</td>
+                <td>${{ "{:,.2f}".format(datos.montoOtorgado) }}</td>
+                <td>{{ datos.fechaInicio }}</td>
+                <td>{{ datos.primerVencimiento }}</td>
+                <td>{{ datos.ultimoVencimiento }}</td>
+
+                <!-- Reglas de estatus -->
+                <td>
+                    {% if datos.datosSaldos.saldoTotalVigente == 0 and datos.datosSaldos.adeudoTotal == 0 %}
+                        LIQUIDADO
+                    {% else %}
+                        {{ datos.statusCredito }}
+                    {% endif %}
+                </td>
+
+                <td>{{ datos.referenciaSTP }}</td>
+
+                <!-- Mostrar saldo a favor -->
+                {% if datos.datosSaldos.saldoParaLiquidar < 0 %}
+                    <td>${{ "{:,.2f}".format(datos.datosSaldos.saldoParaLiquidar | abs) }}</td>
+                {% endif %}
+            </tr>
+        </tbody>
+    </table>
+</div>
+
 
             <!-- Datos de Referencias -->
             <h5 class="section-title mt-4">Referencias</h5>
