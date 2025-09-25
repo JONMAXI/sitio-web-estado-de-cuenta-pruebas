@@ -39,24 +39,17 @@ body { background-color: #f8f9fa; }
     text-align: center;
 }
 
-/* Canvas tipo hoja A4 horizontal (landscape) */
-#pdfContainer canvas {
-    display: block;
+/* Canvas dentro de la hoja A4 horizontal */
+.pdf-page {
+    display: inline-block;
     margin: 10px auto;
-    width: 1123px;  /* ancho A4 landscape */
-    height: 794px;  /* alto A4 landscape */
     border:1px solid #ddd;
 }
 
+/* Zoom buttons */
 .controls { 
     margin-bottom:10px; 
     text-align:center; 
-}
-
-img.documento-imagen { 
-    max-width: 100%; 
-    margin-top:10px; 
-    border:1px solid #ddd; 
 }
 
 .btn-custom { 
@@ -176,7 +169,7 @@ function drawWatermark(ctx, width, height, text = "SIN VALOR") {
     ctx.restore();
 }
 
-// Render PDF con zoom y hoja A4 horizontal
+// Render PDF con hojas A4 horizontales apiladas verticalmente
 async function renderPdf(blob) {
     if(!currentPdf){
         currentPdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -187,51 +180,42 @@ async function renderPdf(blob) {
         const page = await currentPdf.getPage(i);
         const viewport = page.getViewport({ scale: scale });
 
+        // Creamos canvas proporcional A4 horizontal
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
+        const a4Ratio = 297 / 210; // A4 landscape
+
+        // Ajustamos ancho máximo al contenedor y alto proporcional
+        const maxWidth = container.clientWidth * 0.95; // 95% del contenedor
+        const width = maxWidth * scale;
+        const height = width / a4Ratio;
+
         const ratio = window.devicePixelRatio || 2;
+        canvas.width = width * ratio;
+        canvas.height = height * ratio;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        canvas.classList.add('pdf-page');
 
-        // Tamaño fijo tipo A4 landscape + zoom
-        canvas.width = 1123 * ratio * scale;
-        canvas.height = 794 * ratio * scale;
-        canvas.style.width = 1123 * scale + 'px';
-        canvas.style.height = 794 * scale + 'px';
+        // Escalamos contenido PDF
+        const renderViewport = page.getViewport({ scale: canvas.width / viewport.width });
+        await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
-        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
         drawWatermark(ctx, canvas.width, canvas.height);
 
         container.appendChild(canvas);
     }
 }
 
-// Render para imágenes con watermark
-function renderImageWithWatermark(blob) {
-    container.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(blob);
-    img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        drawWatermark(ctx, canvas.width, canvas.height);
-        container.innerHTML = '';
-        container.appendChild(canvas);
-    };
-}
-
-// Zoom buttons con límites
+// Zoom buttons
 document.getElementById('zoomIn').onclick = () => { 
-    if(currentBlob && scale < 5){ 
+    if(currentBlob){ 
         scale *= 1.2;
         renderPdf(currentBlob); 
     } 
 };
 document.getElementById('zoomOut').onclick = () => { 
-    if(currentBlob && scale > 0.5){  
+    if(currentBlob){ 
         scale /= 1.2;
         renderPdf(currentBlob); 
     } 
@@ -275,6 +259,23 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
         document.getElementById('loader').style.display = 'none';
     }
 });
+
+// Render para imágenes con watermark
+function renderImageWithWatermark(blob) {
+    container.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(blob);
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        drawWatermark(ctx, canvas.width, canvas.height);
+        container.innerHTML = '';
+        container.appendChild(canvas);
+    };
+}
 </script>
 </body>
 </html>
