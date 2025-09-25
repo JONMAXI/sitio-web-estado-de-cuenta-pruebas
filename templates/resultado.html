@@ -168,32 +168,38 @@
                             <td>${{ '%.2f'|format(fila.monto_cargo) }}</td>
                             <td>
                                 <ul>
+                                    {# Separar pagos normales y gastos de cobranza #}
                                     {% set pagos_agrupados = {} %}
+                                    {% set gastos_cobranza = {} %}
                                     {% for pago in fila.aplicados %}
                                         {% set key = pago.fechaRegistro %}
-                                        {% if pagos_agrupados.get(key) %}
-                                            {% set pagos_agrupados = pagos_agrupados.update({key: {
-                                                'montoPago': pagos_agrupados[key].montoPago + pago.montoPago,
-                                                'aplicado': pagos_agrupados[key].aplicado + pago.aplicado,
-                                                'extemporaneos': pagos_agrupados[key].get('extemporaneos',0) + (pago.extemporaneos or 0)
-                                            }}) %}
+                                        {% if pago.extemporaneos and pago.extemporaneos > 0 %}
+                                            {% set _ = gastos_cobranza.update({key: pago.extemporaneos}) %}
                                         {% else %}
-                                            {% set _ = pagos_agrupados.update({key: {
-                                                'montoPago': pago.montoPago,
-                                                'aplicado': pago.aplicado,
-                                                'extemporaneos': pago.extemporaneos or 0
-                                            }}) %}
+                                            {% if pagos_agrupados.get(key) %}
+                                                {% set pagos_agrupados = pagos_agrupados.update({key: {
+                                                    'montoPago': pagos_agrupados[key].montoPago + pago.montoPago,
+                                                    'aplicado': pagos_agrupados[key].aplicado + pago.aplicado
+                                                }}) %}
+                                            {% else %}
+                                                {% set _ = pagos_agrupados.update({key: {'montoPago': pago.montoPago, 'aplicado': pago.aplicado}}) %}
+                                            {% endif %}
                                         {% endif %}
                                     {% endfor %}
 
+                                    {# Mostrar pagos normales primero #}
                                     {% for fecha, pago in pagos_agrupados.items() %}
                                     <li>
                                         <span class="text-primary">Pago: ${{ '%.2f'|format(pago.montoPago) }}</span> -
                                         <span class="text-success">Aplicado: ${{ '%.2f'|format(pago.aplicado) }}</span> -
                                         <span class="text-muted fecha-pago">{{ fecha }}</span>
-                                        {% if pago.extemporaneos > 0 %}
-                                        <br><span class="text-danger">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
-                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+
+                                    {# Mostrar gastos de cobranza al final #}
+                                    {% for fecha, monto in gastos_cobranza.items() %}
+                                    <li>
+                                        <span class="text-danger"><b>SE COBRARON GASTOS DE COBRANZA:</b> ${{ '%.2f'|format(monto) }}</span>
                                     </li>
                                     {% endfor %}
                                 </ul>
@@ -231,14 +237,10 @@
                 if (pagos.length === 0) return;
 
                 let ultimaFechaPago = null;
-                let montoUltimoPago = 0;
-
                 pagos.forEach(p => {
                     const f = new Date(p.textContent);
                     if (!ultimaFechaPago || f > ultimaFechaPago) {
                         ultimaFechaPago = f;
-                        // Aquí no se necesita monto, solo fecha para "ultimo pago completo"
-                        montoUltimoPago = 0;
                     }
                 });
 
@@ -282,7 +284,7 @@
 
                 if (totalAplicado >= montoCuota) {
                     if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
-                        ultimoPagoCompleto = { fecha: ultimaFechaPago, monto: montoUltimoPago };
+                        ultimoPagoCompleto = { fecha: ultimaFechaPago };
                     }
                 }
             });
@@ -302,7 +304,7 @@
             text: 'No se encontraron datos para este crédito',
             confirmButtonText: 'Aceptar'
         }).then(() => {
-            window.location.href = "/"; // 🔄 Regresa al formulario
+            window.location.href = "/";
         });
     </script>
     {% endif %}
