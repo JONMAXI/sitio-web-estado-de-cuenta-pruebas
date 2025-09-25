@@ -94,6 +94,7 @@ def auditar_documento(usuario, documento_clave, documento_nombre, id_referencia,
         print(f"[AUDITORIA] Error registrando documento: {e}")
 
 # ------------------ PROCESAR ESTADO DE CUENTA ------------------
+# ------------------ PROCESAR ESTADO DE CUENTA ------------------
 def procesar_estado_cuenta(estado_cuenta):
     try:
         cargos = estado_cuenta.get("datosCargos") or []
@@ -104,25 +105,38 @@ def procesar_estado_cuenta(estado_cuenta):
             pagos = []
 
         pagos_list = []
+
         for p in pagos:
             monto_pago = safe_float(p.get("montoPago"), 0.0)
+            extemporaneos = safe_float(p.get("extemporaneos"), 0.0)
+
+            # Restar extemporaneos para calcular el monto aplicable
+            monto_real = max(monto_pago - extemporaneos, 0.0)
+
             cuotas = _parse_cuotas_field(p.get("numeroCuotaSemanal"))
+
+            # Construimos la estructura del pago
             pagos_list.append({
                 "idPago": p.get("idPago"),
-                "remaining": monto_pago,
+                "remaining": monto_real,
                 "cuotas": cuotas,
                 "fechaValor": p.get("fechaValor"),
                 "fechaRegistro": p.get("fechaRegistro"),
-                "montoPagoOriginal": monto_pago
+                "montoPagoOriginal": monto_pago,
+                "extemporaneos": extemporaneos  # Mantener para mostrar en HTML
             })
 
+        # Ordenar cargos
         cargos_sorted = sorted(cargos, key=lambda c: safe_int(c.get("idCargo"), 0))
+
+        # Indexar pagos por número de cuota
         pagos_por_cuota_index = {}
         for pago in pagos_list:
             for cnum in pago["cuotas"]:
                 pagos_por_cuota_index.setdefault(cnum, []).append(pago)
 
         tabla = []
+
         for cargo in cargos_sorted:
             concepto = cargo.get("concepto", "")
             cuota_num = _extraer_numero_cuota(concepto)
@@ -154,7 +168,8 @@ def procesar_estado_cuenta(estado_cuenta):
                     "aplicado": round(aplicar, 2),
                     "fechaRegistro": pago.get("fechaRegistro"),
                     "fechaPago": fecha_venc,
-                    "diasMora": None
+                    "diasMora": None,
+                    "extemporaneos": pago.get("extemporaneos", 0.0)  # para HTML
                 })
                 pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
                 monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
@@ -177,10 +192,13 @@ def procesar_estado_cuenta(estado_cuenta):
                 "raw_cargo": cargo
             })
 
-        return sorted(tabla, key=lambda x: safe_int(x["cuota"]))
+        # Retornar tabla mezclada; el orden lo manejará el HTML
+        return tabla
+
     except Exception as e:
         print(f"[ERROR] procesar_estado_cuenta: {e}")
         return []
+
 
 # ------------------ BÚSQUEDA DE CRÉDITO ------------------
 def buscar_credito_por_nombre(nombre):

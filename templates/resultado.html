@@ -84,36 +84,34 @@
           </table>
         </div>
 
-<!-- Datos de Referencias -->
-<h5 class="section-title mt-4">Referencias</h5>
-<table class="table table-bordered table-striped text-center align-middle">
-  <thead class="table-dark">
-    <tr>
-      <th>#</th>
-      <th>Nombre</th>
-      <th>Teléfono</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>1</td>
-      <td>{{ datos.datosReferencias.nombre_completo_referencia1 or 'N/A' }}</td>
-      <td>{{ datos.datosReferencias.telefono_referencia1 or 'N/A' }}</td>
-    </tr>
-    <tr>
-      <td>2</td>
-      <td>{{ datos.datosReferencias.nombre_completo_referencia2 or 'N/A' }}</td>
-      <td>{{ datos.datosReferencias.telefono_referencia2 or 'N/A' }}</td>
-    </tr>
-    <tr>
-      <td>3</td>
-      <td>{{ datos.datosReferencias.nombre_referencia_3 or 'N/A' }}</td>
-      <td>{{ datos.datosReferencias.telefono_referencia_3 or 'N/A' }}</td>
-    </tr>
-  </tbody>
-</table>
-
-
+        <!-- Datos de Referencias -->
+        <h5 class="section-title mt-4">Referencias</h5>
+        <table class="table table-bordered table-striped text-center align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Nombre</th>
+              <th>Teléfono</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>{{ datos.datosReferencias.nombre_completo_referencia1 or 'N/A' }}</td>
+              <td>{{ datos.datosReferencias.telefono_referencia1 or 'N/A' }}</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>{{ datos.datosReferencias.nombre_completo_referencia2 or 'N/A' }}</td>
+              <td>{{ datos.datosReferencias.telefono_referencia2 or 'N/A' }}</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>{{ datos.datosReferencias.nombre_referencia_3 or 'N/A' }}</td>
+              <td>{{ datos.datosReferencias.telefono_referencia_3 or 'N/A' }}</td>
+            </tr>
+          </tbody>
+        </table>
 
         <!-- Datos del cliente -->
         <h5 class="section-title">Datos del Cliente</h5>
@@ -158,7 +156,7 @@
           </tbody>
         </table>
 
-        <!-- Tabla de cuotas con cabecera fija -->
+        <!-- Tabla de pagos -->
         <h5 class="section-title">Pagos</h5>
         <div class="table-responsive" style="max-height: 900px; overflow-y: auto;">
             <table class="table table-bordered table-striped">
@@ -186,6 +184,12 @@
                                         <span class="text-success">Aplicado: ${{ '%.2f'|format(pago.aplicado) }}</span> -
                                         <span class="text-muted fecha-pago">{{ pago.fechaRegistro }}</span>
                                     </li>
+                                    {% if pago.extemporaneos and pago.extemporaneos > 0 %}
+                                    <hr style="margin: 0.2rem 0;">
+                                    <li>
+                                        <span class="text-danger">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
+                                    </li>
+                                    {% endif %}
                                 {% endfor %}
                             </ul>
                         </td>
@@ -195,15 +199,11 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <br>
-            <br>
         </div>
-<br>
-            <br>
+        <br><br>
     </div>
     {% endif %}
-<br>
-            <br>
+    <br><br>
 </div>
 
 <!-- Botones de scroll -->
