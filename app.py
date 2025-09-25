@@ -106,7 +106,7 @@ def procesar_estado_cuenta(estado_cuenta):
 
         pagos_list = []
 
-        # Preparar pagos
+        # Preparamos los pagos
         for p in pagos:
             monto_pago = safe_float(p.get("montoPago"), 0.0)
             extemporaneos = safe_float(p.get("extemporaneos"), 0.0)
@@ -127,8 +127,6 @@ def procesar_estado_cuenta(estado_cuenta):
         cargos_sorted = sorted(cargos, key=lambda c: safe_int(c.get("idCargo"), 0))
         tabla = []
 
-        saldo_sobrante = 0.0  # saldo que fluye a la siguiente cuota
-
         for cargo in cargos_sorted:
             concepto = cargo.get("concepto", "")
             cuota_num = _extraer_numero_cuota(concepto)
@@ -141,17 +139,10 @@ def procesar_estado_cuenta(estado_cuenta):
             seguro_total = sum(safe_float(cargo.get(k)) for k in ["seguroBienes","seguroVida","seguroDesempleo"])
             fecha_venc = cargo.get("fechaVencimiento")
 
-            # Aplicar saldo sobrante previo
-            monto_restante_cargo = max(monto_cargo - saldo_sobrante, 0.0)
+            monto_restante_cargo = monto_cargo
             aplicados = []
 
-            # Actualizar saldo sobrante
-            if saldo_sobrante >= monto_cargo:
-                saldo_sobrante -= monto_cargo
-                monto_restante_cargo = 0.0
-            else:
-                saldo_sobrante = 0.0
-
+            # Solo pagos correspondientes a esta cuota
             for pago in pagos_list:
                 if cuota_num not in pago["cuotas"]:
                     continue
@@ -171,8 +162,8 @@ def procesar_estado_cuenta(estado_cuenta):
                     pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
                     monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
 
-                # Solo aplicar gasto de cobranza si la cuota ya está cubierta y no hay saldo sobrante
-                if monto_restante_cargo <= 0 and pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
+                # Registro de gasto de cobranza **solo una vez por pago**
+                if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
                     aplicados.append({
                         "idPago": pago.get("idPago"),
                         "montoPago": round(pago["extemporaneos"], 2),
@@ -182,12 +173,7 @@ def procesar_estado_cuenta(estado_cuenta):
                         "diasMora": None,
                         "extemporaneos": pago.get("extemporaneos", 0.0)
                     })
-                    pago["_extemporaneo_aplicado"] = True
-
-            # Si hay saldo sobrante de este cargo, que fluya a la siguiente cuota
-            if monto_restante_cargo == 0:
-                sobrante = sum(p["remaining"] for p in pagos_list if cuota_num in p["cuotas"])
-                saldo_sobrante += sobrante
+                    pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
 
             total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
             pendiente = round(max(monto_cargo - total_aplicado, 0.0), 2)
@@ -212,6 +198,7 @@ def procesar_estado_cuenta(estado_cuenta):
     except Exception as e:
         print(f"[ERROR] procesar_estado_cuenta: {e}")
         return []
+
 
 
 # ------------------ BÚSQUEDA DE CRÉDITO ------------------
