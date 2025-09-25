@@ -1,322 +1,330 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Resultado Estado de Cuenta</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512..." crossorigin="anonymous" referrerpolicy="no-referrer" />
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<style>
-    body { background-color: #f8f9fa; }
-    .logo { max-height: 60px; }
-    .header-bar { background-color: white; padding: 1rem 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
-    .table-container { background: white; border-radius: 8px; padding: 2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-top: 2rem; }
-    .btn-custom { background-color: #0d6efd; color: white; font-weight: 500; }
-    .btn-custom:hover { background-color: #084298; }
-    h5.section-title { margin-top: 2rem; color: #495057; }
-    td ul { 
-        list-style: none; 
-        padding-left: 0; 
-        margin-bottom: 0; 
-        max-height: 100px; 
-        overflow-y: auto; 
-    }
-    td ul li {
-        font-size: 0.9rem;
-        margin-bottom: 0.2rem;
-    }
-</style>
+    <meta charset="UTF-8">
+    <title>Resultado Estado de Cuenta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .logo {
+            max-height: 60px;
+        }
+        .header-bar {
+            background-color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 2rem;
+        }
+        .btn-custom {
+            background-color: #0d6efd;
+            color: white;
+            font-weight: 500;
+        }
+        .btn-custom:hover {
+            background-color: #084298;
+        }
+        h5.section-title {
+            margin-top: 2rem;
+            color: #495057;
+        }
+        td ul {
+            list-style: none;
+            padding-left: 0;
+            margin-bottom: 0;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        td ul li {
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+        }
+    </style>
 </head>
 <body>
-<div class="header-bar d-flex justify-content-between align-items-center">
-  <div class="d-flex align-items-center">
-    <img src="https://maxikash.mx/cdn/shop/files/Logotipo-Maxikash-Outline.png?v=1749328460" alt="Logo" class="logo me-3">
-    <h5 class="mb-0 text-secondary">Resultado de Estado de Cuenta</h5>
-  </div>
-  {% if session.get('usuario') %}
-  <div class="text-end">
-    <a href="/documentos" class="btn btn-outline-primary logout-btn">Consulta Documentos</a>
-    <a href="/logout" class="btn btn-outline-danger logout-btn">Cerrar sesión</a>
-  </div>
-  {% endif %}
-</div>
-
-<div class="container">
-    {% if error %}
-        <div class="alert alert-danger">{{ error }}</div>
-    {% endif %}
-
-    {% if datos %}
-    <div class="table-container mt-3">
-        <div class="d-flex justify-content-end mt-4">
-            <a href="/" class="btn btn-custom">Nueva Consulta</a>
+    <div class="header-bar d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center">
+            <img src="https://maxikash.mx/cdn/shop/files/Logotipo-Maxikash-Outline.png?v=1749328460" alt="Logo" class="logo me-3">
+            <h5 class="mb-0 text-secondary">Resultado de Estado de Cuenta</h5>
         </div>
-
-        <!-- Datos generales -->
-        <h5 class="section-title">Datos Generales</h5>
-        <div class="table-responsive">
-          <table class="table table-bordered table-striped text-center align-middle">
-            <thead class="table-dark">
-              <tr>
-                <th>ID Crédito</th>
-                <th>Cuota</th>
-                <th>Monto Otorgado</th>
-                <th>Fecha Inicio</th>
-                <th>Primer Vencimiento</th>
-                <th>Último Vencimiento</th>
-                <th>Status Crédito</th>
-                <th>Referencia STP</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{{ datos.idCredito }}</td>
-                <td>${{ datos.cuota }}</td>
-                <td>${{ "{:,.2f}".format(datos.montoOtorgado) }}</td>
-                <td>{{ datos.fechaInicio }}</td>
-                <td>{{ datos.primerVencimiento }}</td>
-                <td>{{ datos.ultimoVencimiento }}</td>
-                <td>{{ datos.statusCredito }}</td>
-                <td>{{ datos.referenciaSTP }}</td>
-              </tr>
-            </tbody>
-          </table>
+        {% if session.get('usuario') %}
+        <div class="text-end">
+            <a href="/documentos" class="btn btn-outline-primary logout-btn">Consulta Documentos</a>
+            <a href="/logout" class="btn btn-outline-danger logout-btn">Cerrar sesión</a>
         </div>
+        {% endif %}
+    </div>
 
-        <!-- Datos de Referencias -->
-        <h5 class="section-title mt-4">Referencias</h5>
-        <table class="table table-bordered table-striped text-center align-middle">
-          <thead class="table-dark">
-            <tr>
-              <th>#</th>
-              <th>Nombre</th>
-              <th>Teléfono</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>1</td>
-              <td>{{ datos.datosReferencias.nombre_completo_referencia1 or 'N/A' }}</td>
-              <td>{{ datos.datosReferencias.telefono_referencia1 or 'N/A' }}</td>
-            </tr>
-            <tr>
-              <td>2</td>
-              <td>{{ datos.datosReferencias.nombre_completo_referencia2 or 'N/A' }}</td>
-              <td>{{ datos.datosReferencias.telefono_referencia2 or 'N/A' }}</td>
-            </tr>
-            <tr>
-              <td>3</td>
-              <td>{{ datos.datosReferencias.nombre_referencia_3 or 'N/A' }}</td>
-              <td>{{ datos.datosReferencias.telefono_referencia_3 or 'N/A' }}</td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="container">
+        {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
 
-        <!-- Datos del cliente -->
-        <h5 class="section-title">Datos del Cliente</h5>
-        <table class="table table-bordered table-striped text-center align-middle">
-          <tbody>
-            <tr>
-              <th>Nombre</th>
-              <td><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.nombreCliente }}</td>
-            </tr>
-            <tr>
-              <th>RFC</th>
-              <td><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.rfc }}</td>
-            </tr>
-            <tr>
-              <th>Días Mora Máximo</th>
-              <td><strong>{{ datos.datosSaldos.diasMoraMaximo }}</strong></td>
-            </tr>
-            <tr>
-              <th>Días Mora</th>
-              <td><strong>{{ datos.datosSaldos.diasMora }}</strong></td>
-            </tr>
-            <tr>
-              <th>Cuotas Contratadas</th>
-              <td><strong>{{ datos.datosSaldos.cuotasContratadas }} cuotas</strong></td>
-            </tr>
-            <tr>
-              <th>Cuotas Pagadas</th>
-              <td><strong>{{ datos.datosSaldos.cuotasPagadas }} cuotas</strong></td>
-            </tr>
-            <tr>
-              <th>Saldo Para Liquidar</th>
-              <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoParaLiquidarV2) }}</strong> </td>
-            </tr>
-            <tr>
-              <th>Saldo Total Vencido</th>
-              <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoTotalVencido) }}</strong></td>
-            </tr>
-            <tr>
-              <th>Último Pago Completo</th>
-              <td id="ultimo-pago-completo"><strong>N/A</strong></td>
-            </tr>
-          </tbody>
-        </table>
+        {% if datos %}
+        <div class="table-container mt-3">
+            <div class="d-flex justify-content-end mt-4">
+                <a href="/" class="btn btn-custom">Nueva Consulta</a>
+            </div>
 
-        <!-- Tabla de pagos -->
-        <h5 class="section-title">Pagos</h5>
-        <div class="table-responsive" style="max-height: 900px; overflow-y: auto;">
-            <table class="table table-bordered table-striped">
-                <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
+            <!-- Datos generales -->
+            <h5 class="section-title">Datos Generales</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped text-center align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID Crédito</th>
+                            <th>Cuota</th>
+                            <th>Monto Otorgado</th>
+                            <th>Fecha Inicio</th>
+                            <th>Primer Vencimiento</th>
+                            <th>Último Vencimiento</th>
+                            <th>Status Crédito</th>
+                            <th>Referencia STP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>{{ datos.idCredito }}</td>
+                            <td>${{ datos.cuota }}</td>
+                            <td>${{ "{:,.2f}".format(datos.montoOtorgado) }}</td>
+                            <td>{{ datos.fechaInicio }}</td>
+                            <td>{{ datos.primerVencimiento }}</td>
+                            <td>{{ datos.ultimoVencimiento }}</td>
+                            <td>{{ datos.statusCredito }}</td>
+                            <td>{{ datos.referenciaSTP }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Datos de Referencias -->
+            <h5 class="section-title mt-4">Referencias</h5>
+            <table class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-dark">
                     <tr>
-                        <th>Cuota</th>
-                        <th>Fecha</th>
-                        <th>Pago a Realizar</th>
-                        <th>Pagos Realizados por el cliente y Excedentes</th>
-                        <th>Total Aplicado</th>
-                        <th>Días de Mora</th>
+                        <th>#</th>
+                        <th>Nombre</th>
+                        <th>Teléfono</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for fila in resultado %}
                     <tr>
-                        <td>{{ fila.cuota }}</td>
-                        <td class="fecha-cuota">{{ fila.fecha }}</td>
-                        <td>${{ '%.2f'|format(fila.monto_cargo) }}</td>
-                        <td>
-                            <ul>
-                                {% set gasto_mostrado = false %}
-                                {% for pago in fila.aplicados %}
-                                    {% if pago.extemporaneos and pago.extemporaneos > 0 and not gasto_mostrado %}
-                                        <hr style="margin: 0.2rem 0;">
-                                        <li>
-                                            <span class="text-danger fw-bold">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
-                                        </li>
-                                        {% set gasto_mostrado = true %}
-                                    {% endif %}
-                                    <li>
-                                        {% if pago.montoPago > pago.aplicado %}
-                                            <!-- Excedente: azul -->
-                                            <span class="text-primary">Excedente: ${{ '%.2f'|format(pago.montoPago - pago.aplicado) }}</span>
-                                            - <span class="text-success">Aplicado: ${{ '%.2f'|format(pago.aplicado) }}</span>
-                                        {% else %}
-                                            <!-- Pago normal: verde -->
-                                            <span class="text-success">Pago: ${{ '%.2f'|format(pago.aplicado) }}</span>
-                                        {% endif %}
-                                        - <span class="text-muted fecha-pago">{{ pago.fechaRegistro }}</span>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                        <td>${{ '%.2f'|format(fila.total_pagado) }}</td>
-                        <td class="dias-mora"></td>
+                        <td>1</td>
+                        <td>{{ datos.datosReferencias.nombre_completo_referencia1 or 'N/A' }}</td>
+                        <td>{{ datos.datosReferencias.telefono_referencia1 or 'N/A' }}</td>
                     </tr>
-                    {% endfor %}
+                    <tr>
+                        <td>2</td>
+                        <td>{{ datos.datosReferencias.nombre_completo_referencia2 or 'N/A' }}</td>
+                        <td>{{ datos.datosReferencias.telefono_referencia2 or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>{{ datos.datosReferencias.nombre_referencia_3 or 'N/A' }}</td>
+                        <td>{{ datos.datosReferencias.telefono_referencia_3 or 'N/A' }}</td>
+                    </tr>
                 </tbody>
             </table>
+
+            <!-- Datos del cliente -->
+            <h5 class="section-title">Datos del Cliente</h5>
+            <table class="table table-bordered table-striped text-center align-middle">
+                <tbody>
+                    <tr>
+                        <th>Nombre</th>
+                        <td><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.nombreCliente }}</td>
+                    </tr>
+                    <tr>
+                        <th>RFC</th>
+                        <td><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.rfc }}</td>
+                    </tr>
+                    <tr>
+                        <th>Días Mora Máximo</th>
+                        <td><strong>{{ datos.datosSaldos.diasMoraMaximo }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Días Mora</th>
+                        <td><strong>{{ datos.datosSaldos.diasMora }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Cuotas Contratadas</th>
+                        <td><strong>{{ datos.datosSaldos.cuotasContratadas }} cuotas</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Cuotas Pagadas</th>
+                        <td><strong>{{ datos.datosSaldos.cuotasPagadas }} cuotas</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Saldo Para Liquidar</th>
+                        <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoParaLiquidarV2) }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Saldo Total Vencido</th>
+                        <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoTotalVencido) }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Último Pago Completo</th>
+                        <td id="ultimo-pago-completo"><strong>N/A</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Tabla de pagos -->
+            <h5 class="section-title">Pagos</h5>
+            <div class="table-responsive" style="max-height: 900px; overflow-y: auto;">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th>Cuota</th>
+                            <th>Fecha</th>
+                            <th>Pago a Realizar</th>
+                            <th>Pagos Realizados por el cliente y Excedentes</th>
+                            <th>Total Aplicado</th>
+                            <th>Días de Mora</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fila in resultado %}
+                        <tr>
+                            <td>{{ fila.cuota }}</td>
+                            <td class="fecha-cuota">{{ fila.fecha }}</td>
+                            <td>${{ '%.2f'|format(fila.monto_cargo) }}</td>
+                            <td>
+                                <ul>
+                                    {% set gasto_mostrado = false %}
+                                    {% for pago in fila.aplicados %}
+                                    <li>
+                                        <span class="text-primary">Pago: ${{ '%.2f'|format(pago.montoPago) }}</span> -
+                                        <span class="text-success">Aplicado: ${{ '%.2f'|format(pago.aplicado) }}</span> -
+                                        <span class="text-muted fecha-pago">{{ pago.fechaRegistro }}</span>
+                                    </li>
+                                    {% if pago.extemporaneos and pago.extemporaneos > 0 and not gasto_mostrado %}
+                                    <hr style="margin: 0.2rem 0;">
+                                    <li>
+                                        <span class="text-danger">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
+                                    </li>
+                                    {% set gasto_mostrado = true %}
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                            <td>${{ '%.2f'|format(fila.total_pagado) }}</td>
+                            <td class="dias-mora"></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <br><br>
+        {% endif %}
     </div>
-    {% endif %}
-    <br><br>
-</div>
 
-<!-- Botones de scroll -->
-<button id="scrollBottomBtn" class="btn btn-secondary rounded-circle"
-  style="position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬇️</button>
-<button id="scrollTopBtn" class="btn btn-secondary rounded-circle"
-  style="position: fixed; bottom: 90px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬆️</button>
+    <!-- Botones de scroll -->
+    <button id="scrollBottomBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬇️</button>
+    <button id="scrollTopBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 90px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬆️</button>
 
-<script>
-document.getElementById("scrollBottomBtn").addEventListener("click", function () {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-});
-document.getElementById("scrollTopBtn").addEventListener("click", function () {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    let ultimoPagoCompleto = null;
-
-    document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
-        const fechaCuotaElem = row.querySelector(".fecha-cuota");
-        if (!fechaCuotaElem) return;
-        const fechaCuota = new Date(fechaCuotaElem.textContent);
-
-        const pagos = row.querySelectorAll(".fecha-pago");
-        if (pagos.length === 0) return;
-
-        let ultimaFechaPago = null;
-        let montoUltimoPago = 0;
-
-        pagos.forEach(p => {
-            const f = new Date(p.textContent);
-            const montoPago = parseFloat(p.textContent.replace(/[^0-9.-]+/g,""));
-            if (!ultimaFechaPago || f > ultimaFechaPago) {
-                ultimaFechaPago = f;
-                montoUltimoPago = montoPago;
-            }
+    <script>
+        document.getElementById("scrollBottomBtn").addEventListener("click", function () {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        });
+        document.getElementById("scrollTopBtn").addEventListener("click", function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
-        const diffMs = ultimaFechaPago - fechaCuota;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        document.addEventListener("DOMContentLoaded", function() {
+            let ultimoPagoCompleto = null;
 
-        const diasMoraElem = row.querySelector(".dias-mora");
-        const badge = document.createElement("span");
-        badge.classList.add("badge");
-        badge.style.fontSize = "1rem";
-        badge.style.fontWeight = "500";
-        badge.style.padding = "0.5em";
+            document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
+                const fechaCuotaElem = row.querySelector(".fecha-cuota");
+                if (!fechaCuotaElem) return;
+                const fechaCuota = new Date(fechaCuotaElem.textContent);
+                const pagos = row.querySelectorAll(".fecha-pago");
+                if (pagos.length === 0) return;
 
-        const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
-        const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
+                let ultimaFechaPago = null;
+                let montoUltimoPago = 0;
 
-        if (diffDias > 0) {
-            badge.textContent = diffDias + " días de mora";
-            badge.classList.add("bg-danger");
-        } else if (diffDias < 0) {
-            if (totalAplicado >= montoCuota) {
-                badge.textContent = "Pago anticipado";
-                badge.classList.add("bg-success");
-            } else {
-                const saldoPendiente = montoCuota - totalAplicado;
-                badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
-                badge.classList.add("bg-warning");
-                const hoy = new Date();
-                if (hoy > fechaCuota) {
-                    const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
-                    badge.innerHTML += "<br> " + diasMora + " días de mora";
-                    badge.classList.replace("bg-warning", "bg-danger");
+                pagos.forEach(p => {
+                    const f = new Date(p.textContent);
+                    const montoPago = parseFloat(p.textContent.replace(/[^0-9.-]+/g,""));
+                    if (!ultimaFechaPago || f > ultimaFechaPago) {
+                        ultimaFechaPago = f;
+                        montoUltimoPago = montoPago;
+                    }
+                });
+
+                const diffMs = ultimaFechaPago - fechaCuota;
+                const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const diasMoraElem = row.querySelector(".dias-mora");
+
+                const badge = document.createElement("span");
+                badge.classList.add("badge");
+                badge.style.fontSize = "1rem";
+                badge.style.fontWeight = "500";
+                badge.style.padding = "0.5em";
+
+                const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
+                const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
+
+                if (diffDias > 0) {
+                    badge.textContent = diffDias + " días de mora";
+                    badge.classList.add("bg-danger");
+                } else if (diffDias < 0) {
+                    if (totalAplicado >= montoCuota) {
+                        badge.textContent = "Pago anticipado";
+                        badge.classList.add("bg-success");
+                    } else {
+                        const saldoPendiente = montoCuota - totalAplicado;
+                        badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
+                        badge.classList.add("bg-warning");
+                        const hoy = new Date();
+                        if (hoy > fechaCuota) {
+                            const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+                            badge.innerHTML += "<br> " + diasMora + " días de mora";
+                            badge.classList.replace("bg-warning", "bg-danger");
+                        }
+                    }
+                } else {
+                    badge.textContent = "Sin mora";
+                    badge.classList.add("bg-secondary");
                 }
+
+                diasMoraElem.appendChild(badge);
+
+                if (totalAplicado >= montoCuota) {
+                    if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
+                        ultimoPagoCompleto = { fecha: ultimaFechaPago, monto: montoUltimoPago };
+                    }
+                }
+            });
+
+            const tdUltimoPago = document.getElementById("ultimo-pago-completo");
+            if (ultimoPagoCompleto) {
+                tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
             }
-        } else {
-            badge.textContent = "Sin mora";
-            badge.classList.add("bg-secondary");
-        }
+        });
+    </script>
 
-        diasMoraElem.appendChild(badge);
-
-        if (totalAplicado >= montoCuota) {
-            if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
-                ultimoPagoCompleto = {
-                    fecha: ultimaFechaPago,
-                    monto: montoUltimoPago
-                };
-            }
-        }
-    });
-
-    const tdUltimoPago = document.getElementById("ultimo-pago-completo");
-    if (ultimoPagoCompleto) {
-        tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
-    }
-});
-</script>
-
-{% if usuario_no_existe %}
-<script>
-Swal.fire({
-  icon: 'error',
-  title: 'Usuario no existe',
-  text: 'No se encontraron datos para este crédito',
-  confirmButtonText: 'Aceptar'
-}).then(() => {
-  window.location.href = "/"; // 🔄 Regresa al formulario
-});
-</script>
-{% endif %}
+    {% if usuario_no_existe %}
+    <script>
+        Swal.fire({
+            icon: 'error',
+            title: 'Usuario no existe',
+            text: 'No se encontraron datos para este crédito',
+            confirmButtonText: 'Aceptar'
+        }).then(() => {
+            window.location.href = "/"; // 🔄 Regresa al formulario
+        });
+    </script>
+    {% endif %}
 </body>
 </html>
