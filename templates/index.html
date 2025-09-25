@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Consulta de Estado de Cuenta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .logo { max-height: 60px; }
+        .header-bar { background-color: white; padding: 1rem 2rem; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+        .logout-btn { border-radius: 20px; font-weight: 500; }
+        .card { border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 2rem; background: #fff; margin-bottom: 1rem; }
+        .form-control { border-radius: 10px; }
+        .btn-custom { background-color: #0d6efd; color: white; font-weight: 500; }
+        .btn-custom:hover { background-color: #084298; }
+        h3.section-title { margin-top: 2rem; color: #495057; }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header-bar d-flex justify-content-between align-items-center">
+  <div class="d-flex align-items-center">
+    <img src="https://maxikash.mx/cdn/shop/files/Logotipo-Maxikash-Outline.png?v=1749328460" alt="Logo" class="logo me-3">
+  </div>
+  {% if session.get('usuario') %}
+  <div class="text-end">
+    <small class="text-secondary">
+      <a href="/documentos" class="btn btn-outline-primary logout-btn">Consulta Documentos</a>
+      <a href="/logout" class="btn btn-outline-danger logout-btn">Cerrar sesión</a>
+    </small>
+  </div>
+  {% endif %}
+</div>
+<div><br></div>
+
+<!-- FORMULARIO -->
+<div class="container py-4 d-flex flex-column align-items-center">
+    <div class="col-md-8">
+
+        <!-- FORMULARIO DE BÚSQUEDA POR NOMBRE/ID -->
+        <div class="card mb-3">
+            <h3 class="text-center mb-4">Consulta de Estado de Cuenta</h3>
+
+            {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST" id="formBusqueda">
+                <!-- RADIO OPCIONES -->
+                <div class="mb-3">
+                    <label class="form-label">Buscar por:</label><br>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="modoBusqueda" id="modoID" value="id" 
+                        {% if request.form.modoBusqueda == "id" or not request.form.modoBusqueda %}checked{% endif %}>
+                        <label class="form-check-label" for="modoID">ID de crédito</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="modoBusqueda" id="modoNombre" value="nombre" 
+                        {% if request.form.modoBusqueda == "nombre" %}checked{% endif %}>
+                        <label class="form-check-label" for="modoNombre">Nombre del cliente</label>
+                    </div>
+                </div>
+
+                <!-- INPUT NOMBRE -->
+                <div class="mb-3" id="divNombre">
+                    <label for="nombre" class="form-label">Busca unicamente por el Nombre del Cliente:</label>
+                    <input type="text" class="form-control" name="nombre" id="nombre" value="{{ request.form.nombre or '' }}">
+                </div>
+
+                <!-- INPUT ID -->
+                <div class="mb-3" id="divID">
+                    <label for="idCredito" class="form-label">ID de crédito</label>
+                    <input type="number" class="form-control" id="idCredito" name="idCredito" 
+                           value="{{ request.form.idCredito or '' }}"
+                           oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                </div>
+
+                <!-- FECHA CORTE -->
+                <div class="mb-3" style="display:none;">
+                    <label for="fechaCorte" class="form-label">Fecha de Corte</label>
+                    <input type="date" class="form-control" id="fechaCorte" name="fechaCorte" value="{{ fecha_actual_iso }}">
+                </div>
+
+                <button type="submit" class="btn btn-custom w-100" id="btnBuscar">Buscar</button>
+            </form>
+        </div>
+
+        <!-- FORMULARIO DE SELECCIÓN DE CRÉDITO (SOLO SI HAY RESULTADOS) -->
+        {% if resultados %}
+        <div class="card">
+            <h5 class="mb-3">Resultados de tu busqueda por nombre:</h5>
+            <form method="POST">
+                <div class="mb-3">
+                    <select class="form-control" name="idCredito" required>
+                        <option value="" disabled selected>-- Selecciona un crédito --</option>
+                        {% for r in resultados %}
+                        <option value="{{ r.id_credito }}">
+                            {{ r.Nombre_cliente }} | Crédito: {{ r.id_credito }} | Persona: {{ r.id_cliente }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <input type="hidden" name="fechaCorte" value="{{ fecha_actual_iso }}">
+                <button type="submit" class="btn btn-custom w-100">Consultar Estado de Cuenta</button>
+            </form>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<!-- MODAL LOADER -->
+<div class="modal fade" id="loaderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-center p-4">
+      <div class="spinner-border text-primary" role="status" style="width:3rem; height:3rem;">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
+      <h5 class="mt-3">Estamos buscando resultados, espera un momento...</h5>
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Autollenar fecha
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const formattedToday = `${yyyy}-${mm}-${dd}`;
+    document.getElementById('fechaCorte').value = formattedToday;
+
+    // Mostrar/ocultar inputs según radio
+    function actualizarInputs() {
+        const modo = document.querySelector('input[name="modoBusqueda"]:checked').value;
+        document.getElementById('divNombre').style.display = (modo === "nombre") ? "block" : "none";
+        document.getElementById('divID').style.display = (modo === "id") ? "block" : "none";
+    }
+
+    document.querySelectorAll('input[name="modoBusqueda"]').forEach(el => {
+        el.addEventListener('change', actualizarInputs);
+    });
+
+    // Inicializar según valor POST
+    actualizarInputs();
+
+    // Modal loader al buscar por nombre
+    const formBusqueda = document.getElementById("formBusqueda");
+    formBusqueda.addEventListener("submit", function(e){
+        const modo = document.querySelector('input[name="modoBusqueda"]:checked').value;
+        const boton = document.getElementById("btnBuscar");
+        if(modo === "nombre"){
+            boton.disabled = true;
+            const loaderModal = new bootstrap.Modal(document.getElementById('loaderModal'));
+            loaderModal.show();
+        }
+    });
+</script>
+
+</body>
+</html>
