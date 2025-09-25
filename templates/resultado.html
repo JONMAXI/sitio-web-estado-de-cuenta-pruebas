@@ -178,17 +178,19 @@
                         <td>${{ '%.2f'|format(fila.monto_cargo) }}</td>
                         <td>
                             <ul>
+                                {% set gasto_mostrado = false %}
                                 {% for pago in fila.aplicados %}
                                     <li>
                                         <span class="text-primary">Pago: ${{ '%.2f'|format(pago.montoPago) }}</span> -
                                         <span class="text-success">Aplicado: ${{ '%.2f'|format(pago.aplicado) }}</span> -
                                         <span class="text-muted fecha-pago">{{ pago.fechaRegistro }}</span>
                                     </li>
-                                    {% if pago.extemporaneos and pago.extemporaneos > 0 %}
-                                    <hr style="margin: 0.2rem 0;">
-                                    <li>
-                                        <span class="text-danger">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
-                                    </li>
+                                    {% if pago.extemporaneos and pago.extemporaneos > 0 and not gasto_mostrado %}
+                                        <hr style="margin: 0.2rem 0;">
+                                        <li>
+                                            <span class="text-danger">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
+                                        </li>
+                                        {% set gasto_mostrado = true %}
                                     {% endif %}
                                 {% endfor %}
                             </ul>
