@@ -178,7 +178,6 @@
                         <td>${{ '%.2f'|format(fila.monto_cargo) }}</td>
                         <td>
                             <ul>
-                                {% set gasto_cobranza = 0 %}
                                 {% for pago in fila.aplicados %}
                                     <li>
                                         <span class="text-primary">Pago: ${{ '%.2f'|format(pago.montoPago) }}</span> -
@@ -186,15 +185,12 @@
                                         <span class="text-muted fecha-pago">{{ pago.fechaRegistro }}</span>
                                     </li>
                                     {% if pago.extemporaneos and pago.extemporaneos > 0 %}
-                                        {% set gasto_cobranza = gasto_cobranza + pago.extemporaneos %}
-                                    {% endif %}
-                                {% endfor %}
-                                {% if gasto_cobranza > 0 %}
                                     <hr style="margin: 0.2rem 0;">
                                     <li>
-                                        <span class="text-danger fw-bold">GASTO DE COBRANZA: ${{ '%.2f'|format(gasto_cobranza) }}</span>
+                                        <span class="text-danger">GASTO DE COBRANZA: ${{ '%.2f'|format(pago.extemporaneos) }}</span>
                                     </li>
-                                {% endif %}
+                                    {% endif %}
+                                {% endfor %}
                             </ul>
                         </td>
                         <td>${{ '%.2f'|format(fila.total_pagado) }}</td>
@@ -310,7 +306,7 @@ Swal.fire({
   text: 'No se encontraron datos para este crédito',
   confirmButtonText: 'Aceptar'
 }).then(() => {
-  window.location.href = "/";
+  window.location.href = "/"; // 🔄 Regresa al formulario
 });
 </script>
 {% endif %}
