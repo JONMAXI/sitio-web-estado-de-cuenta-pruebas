@@ -106,7 +106,7 @@ def procesar_estado_cuenta(estado_cuenta):
 
         pagos_list = []
 
-        # Preparamos los pagos
+        # Preparar pagos
         for p in pagos:
             monto_pago = safe_float(p.get("montoPago"), 0.0)
             extemporaneos = safe_float(p.get("extemporaneos"), 0.0)
@@ -162,18 +162,19 @@ def procesar_estado_cuenta(estado_cuenta):
                     pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
                     monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
 
-                # Registro de gasto de cobranza **solo una vez por pago**
+                # Registro de gasto de cobranza **solo en la última cuota del pago**
                 if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
-                    aplicados.append({
-                        "idPago": pago.get("idPago"),
-                        "montoPago": round(pago["extemporaneos"], 2),
-                        "aplicado": round(pago["extemporaneos"], 2),
-                        "fechaRegistro": pago.get("fechaRegistro"),
-                        "fechaPago": fecha_venc,
-                        "diasMora": None,
-                        "extemporaneos": pago.get("extemporaneos", 0.0)
-                    })
-                    pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
+                    if cuota_num == max(pago["cuotas"]):
+                        aplicados.append({
+                            "idPago": pago.get("idPago"),
+                            "montoPago": round(pago["extemporaneos"], 2),
+                            "aplicado": round(pago["extemporaneos"], 2),
+                            "fechaRegistro": pago.get("fechaRegistro"),
+                            "fechaPago": fecha_venc,
+                            "diasMora": None,
+                            "extemporaneos": pago.get("extemporaneos", 0.0)
+                        })
+                        pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
 
             total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
             pendiente = round(max(monto_cargo - total_aplicado, 0.0), 2)
