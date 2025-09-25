@@ -255,14 +255,17 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
         currentPdf = null; // fuerza nuevo renderizado
 
         if(tipo === 'INE'){
-            scale = 1.0;
-            await renderPdf(blob);
-        } else if(tipo === 'Contrato'){
-            scale = 3.0; // máxima resolución para Contrato
-            await renderPdf(blob);
-        } else {
-            renderImageWithWatermark(blob);
-        }
+    scale = 1.0;
+    await renderPdf(blob);
+} else if(tipo === 'Contrato'){
+    scale = 3.0; // máxima resolución para Contrato
+    await renderPdf(blob);
+} else if(tipo === 'Factura'){
+    scale = 2.0; // resolución intermedia para Factura
+    await renderPdf(blob);
+} else {
+    renderImageWithWatermark(blob);
+}
     } catch(err){
         Swal.fire({ icon:'error', title:'Error', text: err.message });
         document.getElementById('visorContainer').style.display = 'none';

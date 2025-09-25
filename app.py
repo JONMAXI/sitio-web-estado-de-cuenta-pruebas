@@ -424,7 +424,7 @@ def descargar(id):
                 return "Archivo CEP no encontrado", 404
 
             auditar_documento(usuario, "Factura", " completo", id, 1, None)
-            return Response(r.content, mimetype='image/jpeg')
+            return Response(r.content, mimetype='application/pdf')
 
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
