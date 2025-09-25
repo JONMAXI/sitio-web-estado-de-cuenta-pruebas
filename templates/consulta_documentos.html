@@ -28,22 +28,23 @@ body { background-color: #f8f9fa; }
     margin-bottom: 2rem;
 }
 
+/* Contenedor PDF: altura fija tipo hoja, scroll horizontal rápido */
 #pdfContainer { 
     border:1px solid #ccc; 
     padding:10px; 
-    text-align:center; 
     background:#fff; 
-    min-height: 800px; 
-    max-height: none; 
+    height: 90vh; /* altura casi completa de la ventana */
     overflow: auto; /* scroll horizontal y vertical */
+    white-space: nowrap; /* páginas en fila horizontal */
 }
 
-canvas {
-    margin: 10px 0; 
+#pdfContainer canvas {
+    display: inline-block; /* para que queden lado a lado */
+    vertical-align: top;
+    margin-right: 10px;
+    width: auto; /* ancho según zoom */
+    height: 100%; /* ocupa toda la altura del contenedor */
     border:1px solid #ddd; 
-    display:block; 
-    margin-left:auto; 
-    margin-right:auto;
 }
 
 .controls { 
@@ -174,7 +175,7 @@ function drawWatermark(ctx, width, height, text = "SIN VALOR") {
     ctx.restore();
 }
 
-// Render PDF con zoom funcional y scroll
+// Render PDF con zoom funcional y layout horizontal tipo hoja
 async function renderPdf(blob) {
     if(!currentPdf){
         currentPdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -192,7 +193,7 @@ async function renderPdf(blob) {
         canvas.width = viewport.width * ratio;
         canvas.height = viewport.height * ratio;
         canvas.style.width = viewport.width * scale + 'px';
-        canvas.style.height = viewport.height * scale + 'px';
+        canvas.style.height = container.clientHeight + 'px'; // altura tipo hoja
 
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
