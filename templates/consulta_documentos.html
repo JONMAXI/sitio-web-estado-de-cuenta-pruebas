@@ -28,23 +28,24 @@ body { background-color: #f8f9fa; }
     margin-bottom: 2rem;
 }
 
-/* Contenedor PDF: altura fija tipo hoja, scroll horizontal rápido */
+/* Contenedor PDF: scroll vertical por defecto */
 #pdfContainer { 
     border:1px solid #ccc; 
     padding:10px; 
     background:#fff; 
-    height: 90vh; /* altura casi completa de la ventana */
-    overflow: auto; /* scroll horizontal y vertical */
-    white-space: nowrap; /* páginas en fila horizontal */
+    min-height: 800px;
+    max-height: none; 
+    overflow: auto; /* scroll vertical principal */
+    text-align: center;
 }
 
+/* Canvas tipo hoja A4 horizontal (landscape) */
 #pdfContainer canvas {
-    display: inline-block; /* para que queden lado a lado */
-    vertical-align: top;
-    margin-right: 10px;
-    width: auto; /* ancho según zoom */
-    height: 100%; /* ocupa toda la altura del contenedor */
-    border:1px solid #ddd; 
+    display: block;
+    margin: 10px auto;
+    width: 1123px;  /* ancho A4 landscape */
+    height: 794px;  /* alto A4 landscape */
+    border:1px solid #ddd;
 }
 
 .controls { 
@@ -175,7 +176,7 @@ function drawWatermark(ctx, width, height, text = "SIN VALOR") {
     ctx.restore();
 }
 
-// Render PDF con zoom funcional y layout horizontal tipo hoja
+// Render PDF con zoom y hoja A4 horizontal
 async function renderPdf(blob) {
     if(!currentPdf){
         currentPdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -190,10 +191,11 @@ async function renderPdf(blob) {
         const ctx = canvas.getContext('2d');
         const ratio = window.devicePixelRatio || 2;
 
-        canvas.width = viewport.width * ratio;
-        canvas.height = viewport.height * ratio;
-        canvas.style.width = viewport.width * scale + 'px';
-        canvas.style.height = container.clientHeight + 'px'; // altura tipo hoja
+        // Tamaño fijo tipo A4 landscape + zoom
+        canvas.width = 1123 * ratio * scale;
+        canvas.height = 794 * ratio * scale;
+        canvas.style.width = 1123 * scale + 'px';
+        canvas.style.height = 794 * scale + 'px';
 
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
