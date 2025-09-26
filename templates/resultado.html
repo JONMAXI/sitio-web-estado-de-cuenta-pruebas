@@ -269,7 +269,7 @@ document.getElementById("scrollTopBtn").addEventListener("click", function () {
 
 // Convertir DD/MM/YYYY a Date con hora 23:59:59
 function parseFechaCuota(fechaStr) {
-    const partes = fechaStr.split("/"); // ["23","12","2023"]
+    const partes = fechaStr.split("/"); // ["10","02","2025"]
     const dia = parseInt(partes[0], 10);
     const mes = parseInt(partes[1], 10) - 1;
     const anio = parseInt(partes[2], 10);
@@ -291,16 +291,19 @@ document.addEventListener("DOMContentLoaded", function() {
         let totalAplicado = 0;
         let ultimaFechaPago = null;
 
-        // Sumar lo aplicado y encontrar la última fecha
+        // Sumar lo aplicado hasta la fecha de la cuota y encontrar la última fecha
         pagosElems.forEach(p => {
-            const textoPago = p.textContent; 
-            // Asumimos formato: "Pago: $X - Aplicado: $Y - YYYY-MM-DD HH:MM:SS"
+            const textoPago = p.textContent;
+            // Formato: "Pago: $X - Aplicado: $Y - YYYY-MM-DD HH:MM:SS"
             const match = textoPago.match(/Aplicado:\s*\$([\d,.]+)\s*-\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
             if (!match) return;
             const aplicado = parseFloat(match[1].replace(/,/g, ''));
             const fechaPago = new Date(match[2]);
 
-            totalAplicado += aplicado;
+            // Solo contar pagos hasta la fecha de la cuota
+            if (fechaPago <= fechaCuota) {
+                totalAplicado += aplicado;
+            }
 
             if (!ultimaFechaPago || fechaPago > ultimaFechaPago) {
                 ultimaFechaPago = fechaPago;
@@ -308,7 +311,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
 
         const diffMs = ultimaFechaPago - fechaCuota;
-        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24)); // cualquier parte de día cuenta como 1
+        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
         const diasMoraElem = row.querySelector(".dias-mora");
         if (!diasMoraElem) return;
@@ -322,7 +325,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
 
         if (totalAplicado >= montoCuota) {
-            // Pago completo
+            // Pago completo hasta la fecha de la cuota
             if (diffDias > 0) {
                 badge.textContent = diffDias + " días de mora";
                 badge.classList.add("bg-danger");
