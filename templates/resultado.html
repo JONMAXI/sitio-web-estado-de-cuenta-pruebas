@@ -292,17 +292,21 @@ document.addEventListener("DOMContentLoaded", function() {
         let fechaUltimoPagoCompleto = null;
 
         pagos.forEach(p => {
-            // Extraer monto aplicado desde texto: "Aplicado: $X"
-            const match = p.textContent.match(/Aplicado:\s*\$?([\d,.]+)/);
+            // Limpiar texto y extraer monto aplicado
+            const texto = p.textContent.replace(/\n/g, ' ').trim();
+            const match = texto.match(/Aplicado:\s*\$?([\d,.]+)/);
             const montoAplicado = match ? parseFloat(match[1].replace(/,/g, '')) : 0;
             totalAplicado += montoAplicado;
 
             // Si hasta este pago se completó la cuota, registrar fecha
             const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
             if (totalAplicado >= montoCuota) {
-                const fechaPago = new Date(p.textContent.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)[0]);
-                if (!fechaUltimoPagoCompleto || fechaPago > fechaUltimoPagoCompleto) {
-                    fechaUltimoPagoCompleto = fechaPago;
+                const fechaMatch = texto.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+                if (fechaMatch) {
+                    const fechaPago = new Date(fechaMatch[0]);
+                    if (!fechaUltimoPagoCompleto || fechaPago > fechaUltimoPagoCompleto) {
+                        fechaUltimoPagoCompleto = fechaPago;
+                    }
                 }
             }
         });
@@ -326,7 +330,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 badge.textContent = "Sin mora";
                 badge.classList.add("bg-secondary");
             } else {
-                badge.textContent = diffDias + " días de mora";
+                badge.textContent = diffDias === 1 ? "1 día de mora" : diffDias + " días de mora";
                 badge.classList.add("bg-danger");
             }
 
@@ -343,7 +347,7 @@ document.addEventListener("DOMContentLoaded", function() {
             const hoy = new Date();
             if (hoy > fechaCuota) {
                 const diasMora = Math.ceil((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
-                badge.innerHTML += `<br>${diasMora} días de mora`;
+                badge.innerHTML += `<br>${diasMora === 1 ? "1 día de mora" : diasMora + " días de mora"}`;
                 badge.classList.add("bg-danger");
             } else {
                 badge.classList.add("bg-warning");
