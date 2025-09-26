@@ -282,7 +282,7 @@
 
             const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
 
-            // Obtener todos los pagos y ordenarlos por fecha
+            // Obtener pagos
             const pagosElems = Array.from(row.querySelectorAll(".fecha-pago"));
             let pagos = pagosElems.map(p => {
                 const textoPago = p.textContent;
@@ -295,17 +295,17 @@
                 };
             }).filter(p => p !== null);
 
-            // Ordenar por fecha de pago
+            // Ordenar pagos por fecha
             pagos.sort((a,b) => a.fecha - b.fecha);
 
-            // Sumar acumulado y encontrar fecha de pago completo
+            // Calcular acumulado y fecha de pago completo
             let acumulado = 0;
             let fechaPagoCompleto = null;
             for (let p of pagos) {
                 acumulado += p.monto;
                 if (acumulado >= montoCuota && !fechaPagoCompleto) {
                     fechaPagoCompleto = p.fecha;
-                    break; // Ya completó la cuota
+                    break;
                 }
             }
 
@@ -339,7 +339,8 @@
                 // Pago incompleto
                 const saldoPendiente = montoCuota - acumulado;
                 badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
-                // Calcular días de mora basado en último pago parcial si existe
+
+                // Si hay pagos parciales, calcular días de mora desde el último pago parcial
                 let ultimaFechaPago = pagos.length ? pagos[pagos.length-1].fecha : new Date();
                 const diffDias = Math.floor((ultimaFechaPago - fechaCuota)/(1000*60*60*24));
                 if (diffDias > 0) {
@@ -360,7 +361,6 @@
         }
     });
 </script>
-
 {% if usuario_no_existe %}
 <script>
     Swal.fire({
