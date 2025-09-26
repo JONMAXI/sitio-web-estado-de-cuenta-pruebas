@@ -269,6 +269,11 @@
 document.addEventListener("DOMContentLoaded", function() {
     let ultimoPagoCompleto = null;
 
+    // Función para normalizar cualquier fecha a medianoche
+    function soloFecha(d) {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+
     document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
         const fechaCuotaElem = row.querySelector(".fecha-cuota");
         if (!fechaCuotaElem) return;
@@ -285,6 +290,10 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
 
+        // Normalizamos las fechas a medianoche
+        const fechaCuotaNormalizada = soloFecha(fechaCuota);
+        const ultimaFechaPagoNormalizada = soloFecha(ultimaFechaPago);
+
         const diasMoraElem = row.querySelector(".dias-mora");
         const badge = document.createElement("span");
         badge.classList.add("badge");
@@ -297,11 +306,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
         if (totalAplicado >= montoCuota) {
             // Pago completo
-            const diffDiasDecimal = (ultimaFechaPago - fechaCuota) / (1000*60*60*24);
-            const diasMora = Math.floor(diffDiasDecimal);
-
-            if (diasMora > 0) {
-                badge.textContent = diasMora + " días de mora";
+            const diffDias = Math.floor((ultimaFechaPagoNormalizada - fechaCuotaNormalizada) / (1000*60*60*24));
+            if (diffDias > 0) {
+                badge.textContent = diffDias + " días de mora";
                 badge.classList.add("bg-danger");
             } else {
                 badge.textContent = "Sin mora";
@@ -313,9 +320,9 @@ document.addEventListener("DOMContentLoaded", function() {
             badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
             badge.classList.add("bg-warning");
 
-            const hoy = new Date();
-            if (hoy > fechaCuota) {
-                const diasMoraHoy = Math.floor((hoy - fechaCuota) / (1000*60*60*24));
+            const hoy = soloFecha(new Date());
+            if (hoy > fechaCuotaNormalizada) {
+                const diasMoraHoy = Math.floor((hoy - fechaCuotaNormalizada) / (1000*60*60*24));
                 badge.innerHTML += "<br> " + diasMoraHoy + " días de mora";
                 badge.classList.replace("bg-warning", "bg-danger");
             }
