@@ -266,13 +266,17 @@
         document.getElementById("scrollTopBtn").addEventListener("click", function () {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
+
 document.addEventListener("DOMContentLoaded", function() {
     let ultimoPagoCompleto = null;
 
     document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
         const fechaCuotaElem = row.querySelector(".fecha-cuota");
         if (!fechaCuotaElem) return;
-        const fechaCuota = new Date(fechaCuotaElem.textContent);
+
+        // Tomamos solo año, mes y día para evitar sumar horas parciales
+        const fc = new Date(fechaCuotaElem.textContent);
+        const fechaCuota = new Date(fc.getFullYear(), fc.getMonth(), fc.getDate());
 
         const pagos = row.querySelectorAll(".fecha-pago");
         if (pagos.length === 0) return;
@@ -281,13 +285,14 @@ document.addEventListener("DOMContentLoaded", function() {
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
         const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
 
-        // Encontrar la fecha del último pago
+        // Encontrar la fecha del último pago (solo día completo)
         pagos.forEach(p => {
             const f = new Date(p.textContent);
-            if (!ultimaFechaPago || f > ultimaFechaPago) ultimaFechaPago = f;
+            const fSoloDia = new Date(f.getFullYear(), f.getMonth(), f.getDate());
+            if (!ultimaFechaPago || fSoloDia > ultimaFechaPago) ultimaFechaPago = fSoloDia;
         });
 
-        // Diferencia de días entera
+        // Diferencia de días estrictamente entera
         const diffDias = Math.floor((ultimaFechaPago - fechaCuota) / (1000 * 60 * 60 * 24));
 
         const diasMoraElem = row.querySelector(".dias-mora");
@@ -318,8 +323,9 @@ document.addEventListener("DOMContentLoaded", function() {
             const saldoPendiente = montoCuota - totalAplicado;
             badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
             const hoy = new Date();
-            if (hoy > fechaCuota) {
-                const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+            const hoySoloDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+            if (hoySoloDia > fechaCuota) {
+                const diasMora = Math.floor((hoySoloDia - fechaCuota) / (1000 * 60 * 60 * 24));
                 badge.innerHTML += "<br>" + diasMora + " días de mora";
                 badge.classList.replace("bg-warning", "bg-danger");
             } else {
@@ -331,12 +337,12 @@ document.addEventListener("DOMContentLoaded", function() {
         diasMoraElem.appendChild(badge);
     });
 
-    // Mostrar último pago completo
     const tdUltimoPago = document.getElementById("ultimo-pago-completo");
     if (ultimoPagoCompleto) {
         tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
     }
 });
+
 
 
 
