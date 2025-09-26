@@ -92,6 +92,29 @@
 </div>
 
 
+
+
+<!-- Sección: Datos del Cliente -->
+<h5 class="section-title">Datos del Cliente</h5>
+<div class="table-responsive">
+    <table class="table table-bordered table-striped text-center align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th style="width: 450px;">Nombre</th>
+                <th>RFC</th>
+		<th>Celular</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="width: 450px;"><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.nombreCliente }}</td>
+                <td>{{ datos.datosCliente.rfc }}</td>
+                <td>{{ datos.datosCliente.celular }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
    <!-- Datos de Referencias -->
 <h5 class="section-title mt-4">Referencias</h5>
 <table class="table table-bordered table-striped text-center align-middle">
@@ -134,48 +157,40 @@
     </tbody>
 </table>
 
-            <!-- Datos del cliente -->
-            <h5 class="section-title">Datos del Cliente</h5>
-            <table class="table table-bordered table-striped text-center align-middle">
-                <tbody>
-                    <tr>
-                        <th>Nombre</th>
-                        <td><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.nombreCliente }}</td>
-                    </tr>
-                    <tr>
-                        <th>RFC</th>
-                        <td><i class="fa-solid fa-user me-2"></i> {{ datos.datosCliente.rfc }}</td>
-                    </tr>
-                    <tr>
-                        <th>Días Mora Máximo</th>
-                        <td><strong>{{ datos.datosSaldos.diasMoraMaximo }}</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Días Mora</th>
-                        <td><strong>{{ datos.datosSaldos.diasMora }}</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Cuotas Contratadas</th>
-                        <td><strong>{{ datos.datosSaldos.cuotasContratadas }} cuotas</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Cuotas Pagadas</th>
-                        <td><strong>{{ datos.datosSaldos.cuotasPagadas }} cuotas</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Saldo Para Liquidar</th>
-                        <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoParaLiquidarV2) }}</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Saldo Total Vencido</th>
-                        <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoTotalVencido) }}</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Último Pago Completo</th>
-                        <td id="ultimo-pago-completo"><strong>N/A</strong></td>
-                    </tr>
-                </tbody>
-            </table>
+
+<!-- Sección: Datos de Saldos -->
+<h5 class="section-title">Datos de Saldos</h5>
+<div class="table-responsive">
+    <table class="table table-bordered table-striped text-center align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Días Mora Máximo</th>
+                <th>Días Mora</th>
+                <th>Cuotas Contratadas</th>
+                <th>Cuotas Pagadas</th>
+                <th>Saldo Para Liquidar</th>
+                <th>Saldo Total Vencido</th>
+                <th>Último Pago Completo</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>{{ datos.datosSaldos.diasMoraMaximo }}</strong></td>
+                <td><strong>{{ datos.datosSaldos.diasMora }}</strong></td>
+                <td><strong>{{ datos.datosSaldos.cuotasContratadas }} cuotas</strong></td>
+                <td><strong>{{ datos.datosSaldos.cuotasPagadas }} cuotas</strong></td>
+                <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoParaLiquidarV2) }}</strong></td>
+                <td><strong>${{ "{:,.2f}".format(datos.datosSaldos.saldoTotalVencido) }}</strong></td>
+                <td id="ultimo-pago-completo"><strong>N/A</strong></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+
+
+
+
 
             <!-- Tabla de pagos -->
             <h5 class="section-title">Pagos</h5>
@@ -244,101 +259,98 @@
     <button id="scrollBottomBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬇️</button>
     <button id="scrollTopBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 90px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬆️</button>
 
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-
-    function fechaSoloDia(fecha) {
-        return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
-    }
-
-    let ultimoPagoCompleto = null;
-
-    document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
-        const fechaCuotaElem = row.querySelector(".fecha-cuota");
-        if (!fechaCuotaElem) return;
-        const fechaCuota = new Date(fechaCuotaElem.textContent);
-        const fechaCuotaDia = fechaSoloDia(fechaCuota);
-
-        const pagos = row.querySelectorAll(".fecha-pago");
-        const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
-        const diasMoraElem = row.querySelector(".dias-mora");
-
-        let acumulado = 0;
-        let fechaPagoCompleto = null;
-
-        // Procesar pagos parciales
-        pagos.forEach(p => {
-            const texto = p.textContent;
-            const match = texto.match(/Aplicado:\s*\$([\d,.]+)/);
-            if (!match) return;
-            const aplicado = parseFloat(match[1].replace(/,/g,''));
-            acumulado += aplicado;
-
-            if (acumulado >= montoCuota && !fechaPagoCompleto) {
-                fechaPagoCompleto = new Date(p.textContent);
-            }
+    <script>
+        document.getElementById("scrollBottomBtn").addEventListener("click", function () {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        });
+        document.getElementById("scrollTopBtn").addEventListener("click", function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
-        let diffDias = null;
+        document.addEventListener("DOMContentLoaded", function() {
+            let ultimoPagoCompleto = null;
+            document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
+                const fechaCuotaElem = row.querySelector(".fecha-cuota");
+                if (!fechaCuotaElem) return;
+                const fechaCuota = new Date(fechaCuotaElem.textContent);
+                const pagos = row.querySelectorAll(".fecha-pago");
+                if (pagos.length === 0) return;
 
-        if (fechaPagoCompleto) {
-            const fechaPagoDia = fechaSoloDia(fechaPagoCompleto);
-            diffDias = Math.floor((fechaPagoDia - fechaCuotaDia)/(1000*60*60*24));
-        } else {
-            // Pago incompleto → calcular días de mora hasta hoy
-            const hoyDia = fechaSoloDia(new Date());
-            diffDias = Math.floor((hoyDia - fechaCuotaDia)/(1000*60*60*24));
-        }
+                let ultimaFechaPago = null;
+                let montoUltimoPago = 0;
 
-        // Crear badge
-        const badge = document.createElement("span");
-        badge.classList.add("badge");
-        badge.style.fontSize = "1rem";
-        badge.style.fontWeight = "500";
-        badge.style.padding = "0.5em";
+                pagos.forEach(p => {
+                    const f = new Date(p.textContent);
+                    if (!ultimaFechaPago || f > ultimaFechaPago) {
+                        ultimaFechaPago = f;
+                        // Aquí no se necesita monto, solo fecha para "ultimo pago completo"
+                        montoUltimoPago = 0;
+                    }
+                });
 
-        if (acumulado >= montoCuota) {
-            if (diffDias > 0) {
-                badge.textContent = diffDias + " días de mora";
-                badge.classList.add("bg-danger");
-            } else if (diffDias < 0) {
-                badge.textContent = "Pago anticipado";
-                badge.classList.add("bg-success");
-            } else {
-                badge.textContent = "Sin mora";
-                badge.classList.add("bg-secondary");
+                const diffMs = ultimaFechaPago - fechaCuota;
+                const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const diasMoraElem = row.querySelector(".dias-mora");
+
+                const badge = document.createElement("span");
+                badge.classList.add("badge");
+                badge.style.fontSize = "1rem";
+                badge.style.fontWeight = "500";
+                badge.style.padding = "0.5em";
+
+                const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
+                const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
+
+                if (diffDias > 0) {
+                    badge.textContent = diffDias + " días de mora";
+                    badge.classList.add("bg-danger");
+                } else if (diffDias < 0) {
+                    if (totalAplicado >= montoCuota) {
+                        badge.textContent = "Pago anticipado";
+                        badge.classList.add("bg-success");
+                    } else {
+                        const saldoPendiente = montoCuota - totalAplicado;
+                        badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
+                        badge.classList.add("bg-warning");
+                        const hoy = new Date();
+                        if (hoy > fechaCuota) {
+                            const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+                            badge.innerHTML += "<br> " + diasMora + " días de mora";
+                            badge.classList.replace("bg-warning", "bg-danger");
+                        }
+                    }
+                } else {
+                    badge.textContent = "Sin mora";
+                    badge.classList.add("bg-secondary");
+                }
+
+                diasMoraElem.appendChild(badge);
+
+                if (totalAplicado >= montoCuota) {
+                    if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
+                        ultimoPagoCompleto = { fecha: ultimaFechaPago, monto: montoUltimoPago };
+                    }
+                }
+            });
+
+            const tdUltimoPago = document.getElementById("ultimo-pago-completo");
+            if (ultimoPagoCompleto) {
+                tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
             }
+        });
+    </script>
 
-            // Registrar último pago completo
-            if (!ultimoPagoCompleto || fechaPagoCompleto > ultimoPagoCompleto.fecha) {
-                ultimoPagoCompleto = { fecha: fechaPagoCompleto, monto: acumulado };
-            }
-
-        } else {
-            // Pago incompleto
-            const saldoPendiente = montoCuota - acumulado;
-            badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
-
-            if (diffDias > 0) {
-                badge.innerHTML += "<br> " + diffDias + " días de mora";
-                badge.classList.add("bg-danger");
-            } else {
-                badge.classList.add("bg-warning");
-            }
-        }
-
-        diasMoraElem.appendChild(badge);
-    });
-
-    // Mostrar último pago completo
-    const tdUltimoPago = document.getElementById("ultimo-pago-completo");
-    if (ultimoPagoCompleto) {
-        tdUltimoPago.innerHTML = `<strong>${fechaSoloDia(ultimoPagoCompleto.fecha).toLocaleDateString()}</strong>`;
-    }
-
-});
-</script>
-
+    {% if usuario_no_existe %}
+    <script>
+        Swal.fire({
+            icon: 'error',
+            title: 'Usuario no existe',
+            text: 'No se encontraron datos para este crédito',
+            confirmButtonText: 'Aceptar'
+        }).then(() => {
+            window.location.href = "/"; // 🔄 Regresa al formulario
+        });
+    </script>
     {% endif %}
 </body>
 </html>
