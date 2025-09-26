@@ -3,53 +3,64 @@
 <head>
 <meta charset="UTF-8">
 <title>Consulta de Documentos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
 
 <style>
-body { background-color: #f8f9fa; }
+body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-serif; }
 
 .header-bar {
   background-color: white;
-  padding: 1rem 2rem;
+  padding: 0.75rem 1rem;
   box-shadow: 0 0 10px rgba(0,0,0,0.05);
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.logo { max-height: 60px; }
+.logo { max-height: 50px; }
 
 .card-custom {
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    padding: 2rem;
+    padding: 1.5rem;
     background-color: #fff;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
-/* Contenedor PDF: scroll vertical por defecto */
+/* Contenedor PDF: scroll vertical */
 #pdfContainer { 
     border:1px solid #ccc; 
     padding:10px; 
     background:#fff; 
-    min-height: 800px;
-    max-height: none; 
-    overflow: auto; /* scroll vertical principal */
+    min-height: 400px;
+    max-height: 80vh; /* altura adaptable */
+    overflow-y: auto;
     text-align: center;
 }
 
 /* Canvas dentro de la hoja A4 horizontal */
 .pdf-page {
-    display: inline-block;
-    margin: 10px auto;
+    display: block;
+    margin: 0 auto 1rem auto;
     border:1px solid #ddd;
+    max-width: 100%; /* escala en móvil */
+    height: auto;
 }
 
 /* Zoom buttons */
 .controls { 
     margin-bottom:10px; 
     text-align:center; 
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .btn-custom { 
@@ -70,27 +81,40 @@ body { background-color: #f8f9fa; }
     justify-content: center;
     padding: 20px;
 }
+
+@media (max-width: 768px) {
+    .card-custom { padding: 1rem; }
+    .header-bar { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    #pdfContainer { max-height: 60vh; }
+}
+
+@media (max-width: 576px) {
+    .header-bar { padding: 0.5rem; }
+    .logo { max-height: 40px; margin-bottom: 0.5rem; }
+    .card-custom { padding: 0.8rem; }
+    button.btn-custom { font-size: 0.9rem; padding: 0.5rem; }
+}
 </style>
 </head>
 <body>
 
-<div class="header-bar d-flex justify-content-between align-items-center">
-  <div class="d-flex align-items-center">
-    <img src="https://maxikash.mx/cdn/shop/files/Logotipo-Maxikash-Outline.png?v=1749328460" alt="Logo" class="logo me-3">
+<div class="header-bar">
+  <div class="d-flex align-items-center flex-wrap">
+    <img src="https://maxikash.mx/cdn/shop/files/Logotipo-Maxikash-Outline.png?v=1749328460" alt="Logo" class="logo me-2">
     <h5 class="mb-0 text-secondary">Consulta de Documentos</h5>
   </div>
   {% if session.get('usuario') %}
-  <div class="text-end">
-    <a href="/" class="btn btn-outline-primary logout-btn">Consulta Estado de Cuenta</a>
-    <a href="/logout" class="btn btn-outline-danger logout-btn">Cerrar sesión</a>
+  <div class="text-end mt-2 mt-md-0 d-flex flex-wrap gap-1">
+    <a href="/" class="btn btn-outline-primary">Consulta Estado de Cuenta</a>
+    <a href="/logout" class="btn btn-outline-danger">Cerrar sesión</a>
   </div>
   {% endif %}
 </div>
 
-<div class="container py-4">
+<div class="container py-2">
     <!-- Formulario -->
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-12 col-md-8">
             <div class="card card-custom">
                 <h3 class="text-center mb-4">Consulta Documentos</h3>
                 <form id="formConsulta" class="d-flex flex-column">
@@ -128,7 +152,7 @@ body { background-color: #f8f9fa; }
                 </div>
 
                 <div class="controls mb-2">
-                    <button type="button" class="btn btn-sm btn-secondary me-1" id="zoomIn">+</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="zoomIn">+</button>
                     <button type="button" class="btn btn-sm btn-secondary" id="zoomOut">-</button>
                 </div>
                 <div id="pdfContainer"></div>
@@ -146,7 +170,7 @@ let scale = 1.0;
 let currentBlob = null;
 let currentPdf = null;
 
-// Función para la marca de agua
+// Función para marca de agua
 function drawWatermark(ctx, width, height, text = "SIN VALOR") {
     ctx.save();
     ctx.globalAlpha = 0.3;
@@ -169,7 +193,7 @@ function drawWatermark(ctx, width, height, text = "SIN VALOR") {
     ctx.restore();
 }
 
-// Render PDF con hojas A4 horizontales apiladas verticalmente
+// Render PDF
 async function renderPdf(blob) {
     if(!currentPdf){
         currentPdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
@@ -180,14 +204,13 @@ async function renderPdf(blob) {
         const page = await currentPdf.getPage(i);
         const viewport = page.getViewport({ scale: scale });
 
-        // Creamos canvas proporcional A4 horizontal
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const a4Ratio = 297 / 210; // A4 landscape
 
-        // Ajustamos ancho máximo al contenedor y alto proporcional
-        const maxWidth = container.clientWidth * 0.95; // 95% del contenedor
-        const width = maxWidth * scale;
+        // Ajuste responsivo: ancho máximo 100%
+        const containerWidth = container.clientWidth * 0.98;
+        const a4Ratio = 297 / 210; // horizontal
+        const width = containerWidth;
         const height = width / a4Ratio;
 
         const ratio = window.devicePixelRatio || 2;
@@ -197,7 +220,6 @@ async function renderPdf(blob) {
         canvas.style.height = height + 'px';
         canvas.classList.add('pdf-page');
 
-        // Escalamos contenido PDF
         const renderViewport = page.getViewport({ scale: canvas.width / viewport.width });
         await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
@@ -209,16 +231,10 @@ async function renderPdf(blob) {
 
 // Zoom buttons
 document.getElementById('zoomIn').onclick = () => { 
-    if(currentBlob){ 
-        scale *= 1.2;
-        renderPdf(currentBlob); 
-    } 
+    if(currentBlob){ scale *= 1.2; renderPdf(currentBlob); } 
 };
 document.getElementById('zoomOut').onclick = () => { 
-    if(currentBlob){ 
-        scale /= 1.2;
-        renderPdf(currentBlob); 
-    } 
+    if(currentBlob){ scale /= 1.2; renderPdf(currentBlob); } 
 };
 
 // Form submit
@@ -240,18 +256,8 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
         currentBlob = blob;
         currentPdf = null;
 
-        if(tipo === 'INE'){
-            scale = 1.0;
-            await renderPdf(blob);
-        } else if(tipo === 'Contrato'){
-            scale = 3.0;
-            await renderPdf(blob);
-        } else if(tipo === 'Factura'){
-            scale = 2.0;
-            await renderPdf(blob);
-        } else {
-            renderImageWithWatermark(blob);
-        }
+        scale = 1.0;
+        await renderPdf(blob);
     } catch(err){
         Swal.fire({ icon:'error', title:'Error', text: err.message });
         document.getElementById('visorContainer').style.display = 'none';
@@ -259,23 +265,6 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
         document.getElementById('loader').style.display = 'none';
     }
 });
-
-// Render para imágenes con watermark
-function renderImageWithWatermark(blob) {
-    container.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(blob);
-    img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        drawWatermark(ctx, canvas.width, canvas.height);
-        container.innerHTML = '';
-        container.appendChild(canvas);
-    };
-}
 </script>
 </body>
 </html>
