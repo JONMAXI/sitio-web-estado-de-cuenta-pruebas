@@ -267,9 +267,9 @@ document.getElementById("scrollTopBtn").addEventListener("click", function () {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// Convertir DD/MM/YYYY a Date con hora 23:59:59
+// Convierte DD/MM/YYYY a Date con hora 23:59:59
 function parseFechaCuota(fechaStr) {
-    const partes = fechaStr.split("/"); // ["10","02","2025"]
+    const partes = fechaStr.split("/");
     const dia = parseInt(partes[0], 10);
     const mes = parseInt(partes[1], 10) - 1;
     const anio = parseInt(partes[2], 10);
@@ -285,33 +285,27 @@ document.addEventListener("DOMContentLoaded", function() {
 
         const fechaCuota = parseFechaCuota(fechaCuotaElem.textContent);
 
-        const pagosElems = row.querySelectorAll(".fecha-pago");
-        if (pagosElems.length === 0) return;
+        const pagos = row.querySelectorAll(".fecha-pago");
+        if (pagos.length === 0) return;
 
         let totalAplicado = 0;
-        let ultimaFechaPago = null;
+        let fechaUltimoPagoCompleto = null;
 
-        // Sumar lo aplicado hasta la fecha de la cuota y encontrar la última fecha
-        pagosElems.forEach(p => {
-            const textoPago = p.textContent;
-            // Formato: "Pago: $X - Aplicado: $Y - YYYY-MM-DD HH:MM:SS"
-            const match = textoPago.match(/Aplicado:\s*\$([\d,.]+)\s*-\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
-            if (!match) return;
-            const aplicado = parseFloat(match[1].replace(/,/g, ''));
-            const fechaPago = new Date(match[2]);
+        pagos.forEach(p => {
+            // Extraer monto aplicado desde texto: "Aplicado: $X"
+            const match = p.textContent.match(/Aplicado:\s*\$?([\d,.]+)/);
+            const montoAplicado = match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+            totalAplicado += montoAplicado;
 
-            // Solo contar pagos hasta la fecha de la cuota
-            if (fechaPago <= fechaCuota) {
-                totalAplicado += aplicado;
-            }
-
-            if (!ultimaFechaPago || fechaPago > ultimaFechaPago) {
-                ultimaFechaPago = fechaPago;
+            // Si hasta este pago se completó la cuota, registrar fecha
+            const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
+            if (totalAplicado >= montoCuota) {
+                const fechaPago = new Date(p.textContent.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)[0]);
+                if (!fechaUltimoPagoCompleto || fechaPago > fechaUltimoPagoCompleto) {
+                    fechaUltimoPagoCompleto = fechaPago;
+                }
             }
         });
-
-        const diffMs = ultimaFechaPago - fechaCuota;
-        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
         const diasMoraElem = row.querySelector(".dias-mora");
         if (!diasMoraElem) return;
@@ -325,29 +319,31 @@ document.addEventListener("DOMContentLoaded", function() {
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
 
         if (totalAplicado >= montoCuota) {
-            // Pago completo hasta la fecha de la cuota
-            if (diffDias > 0) {
-                badge.textContent = diffDias + " días de mora";
-                badge.classList.add("bg-danger");
-            } else if (diffDias < 0) {
-                badge.textContent = "Pago anticipado";
-                badge.classList.add("bg-success");
-            } else {
+            // Pago completo
+            const diffMs = fechaUltimoPagoCompleto - fechaCuota;
+            const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+            if (diffDias <= 0) {
                 badge.textContent = "Sin mora";
                 badge.classList.add("bg-secondary");
+            } else {
+                badge.textContent = diffDias + " días de mora";
+                badge.classList.add("bg-danger");
             }
 
-            // Actualizar último pago completo
-            if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
-                ultimoPagoCompleto = { fecha: ultimaFechaPago };
+            // Actualizar último pago completo general
+            if (!ultimoPagoCompleto || fechaUltimoPagoCompleto > ultimoPagoCompleto.fecha) {
+                ultimoPagoCompleto = { fecha: fechaUltimoPagoCompleto };
             }
 
         } else {
             // Pago incompleto
             const saldoPendiente = montoCuota - totalAplicado;
             badge.innerHTML = `Incompleto <br> ($${saldoPendiente.toFixed(2)} pendiente)`;
-            if (diffDias > 0) {
-                badge.innerHTML += `<br>${diffDias} días de mora`;
+
+            const hoy = new Date();
+            if (hoy > fechaCuota) {
+                const diasMora = Math.ceil((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+                badge.innerHTML += `<br>${diasMora} días de mora`;
                 badge.classList.add("bg-danger");
             } else {
                 badge.classList.add("bg-warning");
@@ -357,13 +353,13 @@ document.addEventListener("DOMContentLoaded", function() {
         diasMoraElem.appendChild(badge);
     });
 
-    // Mostrar último pago completo
     const tdUltimoPago = document.getElementById("ultimo-pago-completo");
     if (ultimoPagoCompleto) {
         tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
     }
 });
 </script>
+
 
 
 
