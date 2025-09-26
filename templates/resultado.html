@@ -259,7 +259,7 @@
     <button id="scrollBottomBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬇️</button>
     <button id="scrollTopBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 90px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬆️</button>
 
-   <script>
+<script>
 document.getElementById("scrollBottomBtn").addEventListener("click", function () {
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 });
@@ -267,13 +267,13 @@ document.getElementById("scrollTopBtn").addEventListener("click", function () {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// Función para convertir DD/MM/YYYY a Date con hora 23:59:59
+// Convertir DD/MM/YYYY a Date con hora 23:59:59
 function parseFechaCuota(fechaStr) {
-    const partes = fechaStr.split("/"); // ["23", "09", "2025"]
+    const partes = fechaStr.split("/"); // ["23","12","2023"]
     const dia = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10) - 1; // meses 0-11
+    const mes = parseInt(partes[1], 10) - 1;
     const anio = parseInt(partes[2], 10);
-    return new Date(anio, mes, dia, 23, 59, 59); // hora 23:59:59
+    return new Date(anio, mes, dia, 23, 59, 59);
 }
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -285,20 +285,30 @@ document.addEventListener("DOMContentLoaded", function() {
 
         const fechaCuota = parseFechaCuota(fechaCuotaElem.textContent);
 
-        const pagos = row.querySelectorAll(".fecha-pago");
-        if (pagos.length === 0) return;
+        const pagosElems = row.querySelectorAll(".fecha-pago");
+        if (pagosElems.length === 0) return;
 
+        let totalAplicado = 0;
         let ultimaFechaPago = null;
 
-        pagos.forEach(p => {
-            const f = new Date(p.textContent);
-            if (!ultimaFechaPago || f > ultimaFechaPago) {
-                ultimaFechaPago = f;
+        // Sumar lo aplicado y encontrar la última fecha
+        pagosElems.forEach(p => {
+            const textoPago = p.textContent; 
+            // Asumimos formato: "Pago: $X - Aplicado: $Y - YYYY-MM-DD HH:MM:SS"
+            const match = textoPago.match(/Aplicado:\s*\$([\d,.]+)\s*-\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+            if (!match) return;
+            const aplicado = parseFloat(match[1].replace(/,/g, ''));
+            const fechaPago = new Date(match[2]);
+
+            totalAplicado += aplicado;
+
+            if (!ultimaFechaPago || fechaPago > ultimaFechaPago) {
+                ultimaFechaPago = fechaPago;
             }
         });
 
         const diffMs = ultimaFechaPago - fechaCuota;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24)); // cualquier parte de día cuenta como 1
 
         const diasMoraElem = row.querySelector(".dias-mora");
         if (!diasMoraElem) return;
@@ -310,49 +320,48 @@ document.addEventListener("DOMContentLoaded", function() {
         badge.style.padding = "0.5em";
 
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
-        const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
 
-        if (diffDias > 0) {
-            badge.textContent = diffDias + " días de mora";
-            badge.classList.add("bg-danger");
-        } else if (diffDias < 0) {
-            if (totalAplicado >= montoCuota) {
+        if (totalAplicado >= montoCuota) {
+            // Pago completo
+            if (diffDias > 0) {
+                badge.textContent = diffDias + " días de mora";
+                badge.classList.add("bg-danger");
+            } else if (diffDias < 0) {
                 badge.textContent = "Pago anticipado";
                 badge.classList.add("bg-success");
             } else {
-                const saldoPendiente = montoCuota - totalAplicado;
-                badge.innerHTML = `Incompleto <br> ($${saldoPendiente.toFixed(2)} pendiente)`;
-
-                const hoy = new Date();
-                if (hoy > fechaCuota) {
-                    const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
-                    badge.innerHTML += `<br>${diasMora} días de mora`;
-                    badge.classList.add("bg-danger");
-                } else {
-                    badge.classList.add("bg-warning");
-                }
+                badge.textContent = "Sin mora";
+                badge.classList.add("bg-secondary");
             }
-        } else {
-            badge.textContent = "Sin mora";
-            badge.classList.add("bg-secondary");
-        }
 
-        diasMoraElem.appendChild(badge);
-
-        // Actualizar último pago completo
-        if (totalAplicado >= montoCuota) {
+            // Actualizar último pago completo
             if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
                 ultimoPagoCompleto = { fecha: ultimaFechaPago };
             }
+
+        } else {
+            // Pago incompleto
+            const saldoPendiente = montoCuota - totalAplicado;
+            badge.innerHTML = `Incompleto <br> ($${saldoPendiente.toFixed(2)} pendiente)`;
+            if (diffDias > 0) {
+                badge.innerHTML += `<br>${diffDias} días de mora`;
+                badge.classList.add("bg-danger");
+            } else {
+                badge.classList.add("bg-warning");
+            }
         }
+
+        diasMoraElem.appendChild(badge);
     });
 
+    // Mostrar último pago completo
     const tdUltimoPago = document.getElementById("ultimo-pago-completo");
     if (ultimoPagoCompleto) {
         tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
     }
 });
 </script>
+
 
 
     {% if usuario_no_existe %}
