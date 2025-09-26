@@ -303,13 +303,13 @@ document.addEventListener("DOMContentLoaded", function() {
         if (totalAplicado >= montoCuota) {
             // Pago completo
             if (diffFloored > 0) {
-                badge.textContent = diffFloored + " días de mora (floor=" + diffFloored + ")";
+                badge.textContent = diffFloored + " días de mora";
                 badge.classList.add("bg-danger");
             } else if (diffFloored < 0) {
-                badge.textContent = "Pago anticipado (floor=" + diffFloored + ")";
+                badge.textContent = "Pago anticipado";
                 badge.classList.add("bg-success");
             } else {
-                badge.textContent = "Sin mora (floor=" + diffFloored + ")";
+                badge.textContent = "Sin mora";
                 badge.classList.add("bg-secondary");
             }
 
@@ -321,14 +321,16 @@ document.addEventListener("DOMContentLoaded", function() {
         } else {
             // Pago incompleto
             const saldoPendiente = montoCuota - totalAplicado;
-            badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)<br>floor=" + diffFloored;
-            badge.classList.add("bg-warning");
+            badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
 
+            // Si la cuota ya pasó, mostrar días de mora desde hoy
             const hoy = new Date();
             if (hoy > fechaCuota) {
                 const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
                 badge.innerHTML += "<br> " + diasMora + " días de mora";
                 badge.classList.replace("bg-warning", "bg-danger");
+            } else {
+                badge.classList.add("bg-warning");
             }
         }
 
