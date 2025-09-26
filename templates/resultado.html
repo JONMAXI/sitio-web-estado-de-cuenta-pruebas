@@ -303,13 +303,13 @@ document.addEventListener("DOMContentLoaded", function() {
         if (totalAplicado >= montoCuota) {
             // Pago completo
             if (diffFloored > 0) {
-                badge.textContent = diffFloored + " días de mora";
+                badge.textContent = diffFloored + " días de mora (floor=" + diffFloored + ")";
                 badge.classList.add("bg-danger");
             } else if (diffFloored < 0) {
-                badge.textContent = "Pago anticipado";
+                badge.textContent = "Pago anticipado (floor=" + diffFloored + ")";
                 badge.classList.add("bg-success");
             } else {
-                badge.textContent = "Sin mora";
+                badge.textContent = "Sin mora (floor=" + diffFloored + ")";
                 badge.classList.add("bg-secondary");
             }
 
@@ -321,7 +321,7 @@ document.addEventListener("DOMContentLoaded", function() {
         } else {
             // Pago incompleto
             const saldoPendiente = montoCuota - totalAplicado;
-            badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
+            badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)<br>floor=" + diffFloored;
             badge.classList.add("bg-warning");
 
             const hoy = new Date();
@@ -342,6 +342,7 @@ document.addEventListener("DOMContentLoaded", function() {
         tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
     }
 });
+
 
     </script>
 
