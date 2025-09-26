@@ -267,6 +267,7 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
+
 document.addEventListener("DOMContentLoaded", function () {
     let ultimoPagoCompleto = null;
 
@@ -282,29 +283,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const fechaCuota = parseFecha(fechaCuotaElem.textContent);
         const pagos = row.querySelectorAll(".fecha-pago");
-        if (pagos.length === 0) return;
-
-        let ultimaFechaPago = null;
-        let montoUltimoPago = 0;
-
-        pagos.forEach(p => {
-            const f = parseFecha(p.textContent);
-            if (!ultimaFechaPago || f > ultimaFechaPago) {
-                ultimaFechaPago = f;
-
-                // Buscar monto aplicado dentro del texto "Aplicado: $xxx"
-                const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
-                if (match) {
-                    montoUltimoPago = parseFloat(match[1].replace(/,/g, ""));
-                }
-            }
-        });
-
-        const diffMs = ultimaFechaPago - fechaCuota;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24)); // ✅ corregido
 
         const diasMoraElem = row.querySelector(".dias-mora");
-
+        diasMoraElem.innerHTML = ""; // limpiar contenido previo
         const badge = document.createElement("span");
         badge.classList.add("badge");
         badge.style.fontSize = "1rem";
@@ -314,12 +295,46 @@ document.addEventListener("DOMContentLoaded", function () {
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ""));
         const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ""));
 
+        const hoy = new Date();
+
+        if (pagos.length === 0) {
+            if (fechaCuota > hoy) {
+                // Cuota aún no llegó → dejar en blanco
+                diasMoraElem.textContent = "";
+                return;
+            } else {
+                // Cuota vencida sin pago → días de mora desde el día siguiente al vencimiento
+                const fechaVencida = new Date(fechaCuota);
+                fechaVencida.setDate(fechaVencida.getDate() + 1);
+                let diffDias = Math.floor((hoy - fechaVencida) / (1000 * 60 * 60 * 24));
+                if (diffDias < 0) diffDias = 0; // por si la fecha es hoy
+                badge.textContent = diffDias + " días de mora";
+                badge.classList.add("bg-danger");
+                diasMoraElem.appendChild(badge);
+                return;
+            }
+        }
+
+        // 🔹 Si hay pagos, seguimos la lógica original
+        let ultimaFechaPago = null;
+        let montoUltimoPago = 0;
+
+        pagos.forEach(p => {
+            const f = parseFecha(p.textContent);
+            if (!ultimaFechaPago || f > ultimaFechaPago) {
+                ultimaFechaPago = f;
+                const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
+                if (match) montoUltimoPago = parseFloat(match[1].replace(/,/g, ""));
+            }
+        });
+
+        const diffMs = ultimaFechaPago - fechaCuota;
+        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
         if (diffDias > 0) {
-            // Pago después de la fecha de cuota
             badge.textContent = diffDias + " días de mora";
             badge.classList.add("bg-danger");
         } else if (diffDias < 0) {
-            // Pago antes de la fecha de cuota
             if (totalAplicado >= montoCuota) {
                 badge.textContent = "Pago anticipado";
                 badge.classList.add("bg-success");
@@ -328,7 +343,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
                 badge.classList.add("bg-warning");
 
-                const hoy = new Date();
                 if (hoy > fechaCuota) {
                     const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
                     badge.innerHTML += "<br> " + diasMora + " días de mora";
@@ -336,7 +350,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             }
         } else {
-            // Pago el mismo día exacto
             badge.textContent = "Sin mora";
             badge.classList.add("bg-secondary");
         }
