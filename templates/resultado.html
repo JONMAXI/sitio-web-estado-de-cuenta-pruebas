@@ -281,13 +281,14 @@ document.addEventListener("DOMContentLoaded", function() {
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ''));
         const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ''));
 
+        // Encontrar la fecha del último pago
         pagos.forEach(p => {
             const f = new Date(p.textContent);
             if (!ultimaFechaPago || f > ultimaFechaPago) ultimaFechaPago = f;
         });
 
-        const diffDias = (ultimaFechaPago - fechaCuota) / (1000 * 60 * 60 * 24); 
-        const diffFloored = Math.floor(diffDias);
+        // Diferencia de días entera
+        const diffDias = Math.floor((ultimaFechaPago - fechaCuota) / (1000 * 60 * 60 * 24));
 
         const diasMoraElem = row.querySelector(".dias-mora");
         const badge = document.createElement("span");
@@ -297,26 +298,29 @@ document.addEventListener("DOMContentLoaded", function() {
         badge.style.padding = "0.5em";
 
         if (totalAplicado >= montoCuota) {
-            if (diffFloored > 0) {
-                badge.textContent = diffFloored + " días de mora";
+            // Pago completo
+            if (diffDias > 0) {
+                badge.textContent = diffDias + " días de mora";
                 badge.classList.add("bg-danger");
-            } else if (diffFloored < 0) {
+            } else if (diffDias < 0) {
                 badge.textContent = "Pago anticipado";
                 badge.classList.add("bg-success");
             } else {
                 badge.textContent = "Sin mora";
                 badge.classList.add("bg-secondary");
             }
+
             if (!ultimoPagoCompleto || ultimaFechaPago > ultimoPagoCompleto.fecha) {
                 ultimoPagoCompleto = { fecha: ultimaFechaPago, monto: montoCuota };
             }
         } else {
+            // Pago incompleto
             const saldoPendiente = montoCuota - totalAplicado;
             badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
             const hoy = new Date();
             if (hoy > fechaCuota) {
                 const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
-                badge.innerHTML += "<br> " + diasMora + " días de mora";
+                badge.innerHTML += "<br>" + diasMora + " días de mora";
                 badge.classList.replace("bg-warning", "bg-danger");
             } else {
                 badge.classList.add("bg-warning");
@@ -327,11 +331,14 @@ document.addEventListener("DOMContentLoaded", function() {
         diasMoraElem.appendChild(badge);
     });
 
+    // Mostrar último pago completo
     const tdUltimoPago = document.getElementById("ultimo-pago-completo");
     if (ultimoPagoCompleto) {
         tdUltimoPago.innerHTML = `<strong>${ultimoPagoCompleto.fecha.toLocaleDateString()}</strong>`;
     }
 });
+
+
 
 
     </script>
