@@ -269,9 +269,11 @@
 document.addEventListener("DOMContentLoaded", function() {
     let ultimoPagoCompleto = null;
 
-    // Función para normalizar cualquier fecha a medianoche
-    function soloFecha(d) {
-        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    // Función para calcular días de mora exactos (ignora horas)
+    function calcularDiasMora(fechaCuota, fechaPago) {
+        const fCuota = new Date(fechaCuota.getFullYear(), fechaCuota.getMonth(), fechaCuota.getDate());
+        const fPago  = new Date(fechaPago.getFullYear(), fechaPago.getMonth(), fechaPago.getDate());
+        return Math.floor((fPago - fCuota) / (1000 * 60 * 60 * 24));
     }
 
     document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function(row) {
@@ -290,10 +292,6 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
 
-        // Normalizamos las fechas a medianoche
-        const fechaCuotaNormalizada = soloFecha(fechaCuota);
-        const ultimaFechaPagoNormalizada = soloFecha(ultimaFechaPago);
-
         const diasMoraElem = row.querySelector(".dias-mora");
         const badge = document.createElement("span");
         badge.classList.add("badge");
@@ -306,9 +304,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
         if (totalAplicado >= montoCuota) {
             // Pago completo
-            const diffDias = Math.floor((ultimaFechaPagoNormalizada - fechaCuotaNormalizada) / (1000*60*60*24));
-            if (diffDias > 0) {
-                badge.textContent = diffDias + " días de mora";
+            const diasMora = calcularDiasMora(fechaCuota, ultimaFechaPago);
+            if (diasMora > 0) {
+                badge.textContent = diasMora + " días de mora";
                 badge.classList.add("bg-danger");
             } else {
                 badge.textContent = "Sin mora";
@@ -320,9 +318,9 @@ document.addEventListener("DOMContentLoaded", function() {
             badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
             badge.classList.add("bg-warning");
 
-            const hoy = soloFecha(new Date());
-            if (hoy > fechaCuotaNormalizada) {
-                const diasMoraHoy = Math.floor((hoy - fechaCuotaNormalizada) / (1000*60*60*24));
+            const hoy = new Date();
+            const diasMoraHoy = calcularDiasMora(fechaCuota, hoy);
+            if (diasMoraHoy > 0) {
                 badge.innerHTML += "<br> " + diasMoraHoy + " días de mora";
                 badge.classList.replace("bg-warning", "bg-danger");
             }
