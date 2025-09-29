@@ -459,7 +459,7 @@ def descargar(id):
             sql = """
             SELECT nombre_archivo
             FROM oferta_documentos
-            WHERE AND tipo_documento = FAD AND pk_oferta_documentos = %s
+            WHERE tipo_documento = 'FAD' AND pk_oferta_documentos = %s
             """
             with get_connection(database=DB3_NAME, use_rds=True) as conn:
                 if not conn:
