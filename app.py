@@ -364,29 +364,6 @@ def documentos():
     return render_template("consulta_documentos.html")
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
-# app_descargas.py
-from flask import Flask, request, session, Response
-import requests
-from io import BytesIO
-from PIL import Image
-from datetime import datetime
-import os
-import mimetypes
-import urllib.parse
-
-# 🔹 Importa conexiones y DB3_NAME desde db_queries
-from db_queries import DB3_NAME
-from db import get_connection
-
-app = Flask(__name__)
-
-# ----------------------------
-# NOTA: Estas variables/funciones deben existir ya en tu proyecto:
-# - TOKEN
-# - ENDPOINT
-# - auditar_documento(usuario, tipo, descripcion, id, exitoso, mensaje)
-# ----------------------------
-
 def _content_disposition_inline(filename: str) -> str:
     q = urllib.parse.quote(filename)
     # Incluye ambos para compatibilidad con navegadores
@@ -401,7 +378,6 @@ def descargar(id):
     usuario = session['usuario']['username']
 
     try:
-        # ------------------ INE ------------------
         if tipo == 'INE':
             fecha_corte = datetime.now().strftime("%Y-%m-%d")
             payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
@@ -448,20 +424,18 @@ def descargar(id):
                 headers={"Content-Disposition": _content_disposition_inline(filename)}
             )
 
-        # ------------------ Factura ------------------
         elif tipo == 'Factura':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
                 auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
-                return "Archivo Factura no encontrado", 404
+                return "Archivo CEP no encontrado", 404
 
-            auditar_documento(usuario, "Factura", "Factura completo", id, 1, None)
+            auditar_documento(usuario, "Factura", " completo", id, 1, None)
             filename = f"{id}_factura.pdf"
             return Response(r.content, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
 
-        # ------------------ Contrato ------------------
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
             r = requests.get(url, timeout=10)
@@ -474,8 +448,8 @@ def descargar(id):
             return Response(r.content, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
 
-        # ------------------ FAD_DOC ------------------
         elif tipo == 'FAD_DOC':
+            # pk_oferta_documentos viene en la ruta <id>
             try:
                 pk = int(id)
             except ValueError:
@@ -505,14 +479,16 @@ def descargar(id):
                 auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "El documento no tiene nombre asociado")
                 return "El documento no tiene nombre asociado", 404
 
+            # normalizar/sanitizar el nombre (evita rutas)
             safe_name = os.path.basename(nombre_archivo)
-            url_s3 = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FAD/{urllib.parse.quote(safe_name)}"
-            r = requests.get(url_s3, timeout=10)
-
+            # URL S3 con carpeta FAD/
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FAD/{urllib.parse.quote(safe_name)}"
+            r = requests.get(url, timeout=10)
             if r.status_code != 200:
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Archivo no encontrado en S3: {url_s3}")
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Archivo {safe_name} no encontrado en S3")
                 return "Archivo no encontrado en S3", 404
 
+            # Determinar por extensión
             _, ext = os.path.splitext(safe_name.lower())
 
             if ext == '.pdf':
@@ -536,19 +512,19 @@ def descargar(id):
                     return "Error al procesar el archivo", 500
 
             else:
+                # Tipo desconocido -> intentar usar Content-Type o devolver binario
                 ctype = r.headers.get('Content-Type') or mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
                 auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
                 return Response(r.content, mimetype=ctype,
                                 headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
-        # ------------------ Tipo no válido ------------------
         else:
             auditar_documento(usuario, tipo, tipo, id, 0, "Tipo de documento no válido")
             return "Tipo de documento no válido", 400
 
     except Exception as e:
         auditar_documento(usuario, tipo, tipo, id, 0, f"Error interno: {e}")
-        return "Error interno en servidor", 500
+        return "Cliente no encontrado en la Base de Datos", 500
 
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
