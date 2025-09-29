@@ -8,6 +8,8 @@ from PIL import Image
 import re
 from db import get_connection
 from db_queries import obtener_datos_cliente
+import mimetypes
+import urllib.parse
 
 app = Flask(__name__)
 app.secret_key = 'clave_super_secreta'
@@ -361,6 +363,11 @@ def documentos():
     return render_template("consulta_documentos.html")
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
+def _content_disposition_inline(filename: str) -> str:
+    q = urllib.parse.quote(filename)
+    # Incluye ambos para compatibilidad con navegadores
+    return f'inline; filename="{filename}"; filename*=UTF-8\'\'{q}'
+
 @app.route('/descargar/<id>')
 def descargar(id):
     if 'usuario' not in session:
@@ -374,7 +381,7 @@ def descargar(id):
             fecha_corte = datetime.now().strftime("%Y-%m-%d")
             payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
             headers = {"Token": TOKEN, "Content-Type": "application/json"}
-            res = requests.post(ENDPOINT, json=payload, headers=headers)
+            res = requests.post(ENDPOINT, json=payload, headers=headers, timeout=10)
             data = res.json() if res.ok else None
 
             if not data or "estadoCuenta" not in data:
@@ -388,8 +395,8 @@ def descargar(id):
 
             url_frente = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg"
             url_reverso = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
-            r1 = requests.get(url_frente)
-            r2 = requests.get(url_reverso)
+            r1 = requests.get(url_frente, timeout=10)
+            r2 = requests.get(url_reverso, timeout=10)
 
             faltantes = []
             if r1.status_code != 200:
@@ -400,7 +407,6 @@ def descargar(id):
                 auditar_documento(usuario, "INE", "INE completo", id, 0, f"No se encontraron los archivos: {', '.join(faltantes)}")
                 return f"No se encontraron los archivos: {', '.join(faltantes)}", 404
 
-            # ✅ Descarga exitosa
             img1 = Image.open(BytesIO(r1.content)).convert("RGB")
             img2 = Image.open(BytesIO(r2.content)).convert("RGB")
             img1.info['dpi'] = (150, 150)
@@ -410,31 +416,106 @@ def descargar(id):
             pdf_bytes.seek(0)
 
             auditar_documento(usuario, "INE", "INE completo", id, 1, None)
+            filename = f"{id}_INE.pdf"
             return Response(
                 pdf_bytes.read(),
                 mimetype='application/pdf',
-                headers={"Content-Disposition": f"inline; filename={id}_INE.pdf"}
+                headers={"Content-Disposition": _content_disposition_inline(filename)}
             )
 
         elif tipo == 'Factura':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
-            r = requests.get(url)
+            r = requests.get(url, timeout=10)
             if r.status_code != 200:
                 auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
                 return "Archivo CEP no encontrado", 404
 
             auditar_documento(usuario, "Factura", " completo", id, 1, None)
-            return Response(r.content, mimetype='application/pdf')
+            filename = f"{id}_factura.pdf"
+            return Response(r.content, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
-            r = requests.get(url)
+            r = requests.get(url, timeout=10)
             if r.status_code != 200:
                 auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 0, "Cliente no encontrado en la Base de Datos")
                 return "Cliente no encontrado en la Base de Datos", 404
 
             auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 1, None)
-            return Response(r.content, mimetype='application/pdf')
+            filename = f"{id}_validaciones.pdf"
+            return Response(r.content, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+
+        elif tipo == 'FAD_DOC':
+            # pk_oferta_documentos viene en la ruta <id>
+            try:
+                pk = int(id)
+            except ValueError:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "ID inválido para FAD_DOC")
+                return "ID inválido", 400
+
+            sql = """
+            SELECT pk_oferta_documentos, nombre_archivo, fecha_creacion, tipo_documento, fk_oferta, estatus, fecha_documento
+            FROM `maxi-prod`.oferta_documentos
+            WHERE pk_oferta_documentos = %s
+            """
+            with get_connection(database=DB3_NAME, use_rds=True) as conn:
+                if not conn:
+                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "No se pudo conectar a la DB")
+                    return "Error de conexión con la base de datos", 500
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(sql, (pk,))
+                row = cursor.fetchone()
+                cursor.close()
+
+            if not row:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "Documento no encontrado en la base")
+                return "Documento no encontrado en la base de datos", 404
+
+            nombre_archivo = row.get("nombre_archivo")
+            if not nombre_archivo:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "El documento no tiene nombre asociado")
+                return "El documento no tiene nombre asociado", 404
+
+            # normalizar/sanitizar el nombre (evita rutas)
+            safe_name = os.path.basename(nombre_archivo)
+            # URL S3 con carpeta FAD/
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FAD/{urllib.parse.quote(safe_name)}"
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Archivo {safe_name} no encontrado en S3")
+                return "Archivo no encontrado en S3", 404
+
+            # Determinar por extensión
+            _, ext = os.path.splitext(safe_name.lower())
+
+            if ext == '.pdf':
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                return Response(r.content, mimetype='application/pdf',
+                                headers={"Content-Disposition": _content_disposition_inline(safe_name)})
+
+            elif ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'):
+                try:
+                    img = Image.open(BytesIO(r.content)).convert("RGB")
+                    img.info['dpi'] = (150, 150)
+                    pdf_bytes = BytesIO()
+                    img.save(pdf_bytes, format='PDF')
+                    pdf_bytes.seek(0)
+                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                    filename = os.path.splitext(safe_name)[0] + '.pdf'
+                    return Response(pdf_bytes.read(), mimetype='application/pdf',
+                                    headers={"Content-Disposition": _content_disposition_inline(filename)})
+                except Exception as e:
+                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Error al convertir imagen a PDF: {e}")
+                    return "Error al procesar el archivo", 500
+
+            else:
+                # Tipo desconocido -> intentar usar Content-Type o devolver binario
+                ctype = r.headers.get('Content-Type') or mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                return Response(r.content, mimetype=ctype,
+                                headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
         else:
             auditar_documento(usuario, tipo, tipo, id, 0, "Tipo de documento no válido")
