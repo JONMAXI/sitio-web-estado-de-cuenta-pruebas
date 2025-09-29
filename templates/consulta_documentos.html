@@ -8,78 +8,15 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
 body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-serif; }
-
-.header-bar {
-  background-color: white;
-  padding: 0.75rem 1rem;
-  box-shadow: 0 0 10px rgba(0,0,0,0.05);
-  margin-bottom: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
+.header-bar { background-color: white; padding: 0.75rem 1rem; box-shadow: 0 0 10px rgba(0,0,0,0.05); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
 .logo { max-height: 50px; }
-
-.card-custom {
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    padding: 1.5rem;
-    background-color: #fff;
-    margin-bottom: 1.5rem;
-}
-
-#visorContainer { 
-    position: relative;
-    min-height: 400px;
-    max-height: 80vh;
-}
-
-#pdfFrame {
-    width: 100%;
-    height: 80vh;
-    border:1px solid #ccc;
-}
-
-#watermarkCanvas {
-    position: absolute;
-    top:0; left:0;
-    width:100%;
-    height:100%;
-    pointer-events: none;
-}
-
-#loader {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-
-.btn-custom { 
-    background-color: #0d6efd; 
-    color: white; 
-    font-weight: 500; 
-    border-radius: 8px;
-}
-.btn-custom:hover { 
-    background-color: #084298; 
-}
-
-@media (max-width: 768px) {
-    .card-custom { padding: 1rem; }
-    .header-bar { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-    #visorContainer { max-height: 60vh; }
-}
-
-@media (max-width: 576px) {
-    .header-bar { padding: 0.5rem; }
-    .logo { max-height: 40px; margin-bottom: 0.5rem; }
-    .card-custom { padding: 0.8rem; }
-    button.btn-custom { font-size: 0.9rem; padding: 0.5rem; }
-}
+.card-custom { border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 1.5rem; background-color: #fff; margin-bottom: 1.5rem; }
+#visorContainer { position: relative; min-height: 400px; max-height: 80vh; }
+#pdfFrame { width: 100%; height: 80vh; border:1px solid #ccc; }
+#watermarkCanvas { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; }
+#loader { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.btn-custom { background-color: #0d6efd; color: white; font-weight: 500; border-radius: 8px; }
+.btn-custom:hover { background-color: #084298; }
 </style>
 </head>
 <body>
@@ -105,8 +42,7 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                 <form id="formConsulta" class="d-flex flex-column">
                     <div class="mb-3">
                         <label for="idDocumento" class="form-label">ID Crédito / Persona</label>
-                        <input type="text" class="form-control" id="idDocumento" required 
-       pattern="\d{1,10}" maxlength="10" title="Solo números, máximo 10 dígitos">
+                        <input type="text" class="form-control" id="idDocumento" required pattern="\d{1,10}" maxlength="10" title="Solo números, máximo 10 dígitos">
                     </div>
                     <div class="mb-3">
                         <label for="tipoDocumento" class="form-label">Tipo de Documento</label>
@@ -135,8 +71,8 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                     <div>Cargando documento...</div>
                 </div>
 
-                <!-- Sandbox seguro: no permite guardar ni imprimir -->
-                <iframe id="pdfFrame" sandbox="allow-scripts"></iframe>
+                <!-- Google Chrome PDF Viewer nativo -->
+                <iframe id="pdfFrame" type="application/pdf"></iframe>
                 <canvas id="watermarkCanvas"></canvas>
             </div>
         </div>
@@ -149,23 +85,19 @@ const canvas = document.getElementById('watermarkCanvas');
 const ctx = canvas.getContext('2d');
 let scale = 1.0;
 
-// Dibuja marca de agua
 function drawWatermark() {
     const rect = iframe.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = "red";
     ctx.font = `${50 * scale}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-
     const stepX = 200 * scale;
     const stepY = 150 * scale;
     const angle = -Math.PI / 4;
-
     for(let y=-canvas.height; y<canvas.height*2; y+=stepY){
         for(let x=-canvas.width; x<canvas.width*2; x+=stepX){
             ctx.save();
@@ -176,19 +108,6 @@ function drawWatermark() {
         }
     }
 }
-
-// Bloqueo impresión
-window.addEventListener('keydown', function(e){
-    if(e.ctrlKey && (e.key === 'p' || e.key === 'P')){
-        e.preventDefault();
-        Swal.fire('No permitido','Impresión bloqueada','warning');
-    }
-});
-
-window.addEventListener('beforeprint', function(e){
-    e.preventDefault();
-    Swal.fire('No permitido','Impresión bloqueada','warning');
-});
 
 // Form submit
 document.getElementById('formConsulta').addEventListener('submit', function(e){
@@ -201,7 +120,7 @@ document.getElementById('formConsulta').addEventListener('submit', function(e){
     document.getElementById('loader').style.display = 'flex';
     document.getElementById('visorContainer').style.display = 'block';
 
-    iframe.src = url;
+    iframe.src = url; // Chrome abrirá su visor nativo
     iframe.onload = () => {
         document.getElementById('loader').style.display = 'none';
         drawWatermark();
