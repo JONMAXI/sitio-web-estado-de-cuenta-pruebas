@@ -72,6 +72,22 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     background-color: #084298; 
 }
 
+/* Bloqueo de herramientas de PDFJS */
+#editorModeButtons,
+#editorModeSeparator,
+#secondaryToolbar,
+#editorSignature,
+#editorHighlight,
+#editorFreeText,
+#editorInk,
+#editorStamp,
+#printButton,
+#downloadButton,
+#secondaryPrint,
+#secondaryDownload {
+    display: none !important;
+}
+
 @media (max-width: 768px) {
     .card-custom { padding: 1rem; }
     .header-bar { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
@@ -183,6 +199,18 @@ function drawWatermark() {
         }
     }
 }
+
+// Bloquear botones que puedan quedar visibles (refuerzo JS)
+document.addEventListener('DOMContentLoaded', () => {
+    const buttonsToDisable = document.querySelectorAll(
+        '#editorModeButtons button, #secondaryToolbar button'
+    );
+    buttonsToDisable.forEach(btn => {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none';
+        btn.style.userSelect = 'none';
+    });
+});
 
 // Form submit
 document.getElementById('formConsulta').addEventListener('submit', async function(e){
