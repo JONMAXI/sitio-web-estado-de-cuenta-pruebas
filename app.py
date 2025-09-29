@@ -8,6 +8,7 @@ from PIL import Image
 import re
 from db import get_connection
 from db_queries import obtener_datos_cliente
+from db_queries import DB3_NAME
 import mimetypes
 import urllib.parse
 
@@ -456,9 +457,9 @@ def descargar(id):
                 return "ID inválido", 400
 
             sql = """
-            SELECT pk_oferta_documentos, nombre_archivo, fecha_creacion, tipo_documento, fk_oferta, estatus, fecha_documento
-            FROM `maxi-prod`.oferta_documentos
-            WHERE pk_oferta_documentos = %s
+            SELECT nombre_archivo
+            FROM oferta_documentos
+            WHERE AND tipo_documento = FAD AND pk_oferta_documentos = %s
             """
             with get_connection(database=DB3_NAME, use_rds=True) as conn:
                 if not conn:
