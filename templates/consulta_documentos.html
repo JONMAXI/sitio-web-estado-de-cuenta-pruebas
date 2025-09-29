@@ -31,11 +31,9 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     margin-bottom: 1.5rem;
 }
 
-/* Contenedor PDF: scroll vertical */
-#visorContainer { 
+#visorWrapper {
     position: relative;
     min-height: 400px;
-    max-height: 80vh;
 }
 
 /* Iframe PDF */
@@ -43,16 +41,20 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     width: 100%;
     height: 80vh;
     border:1px solid #ccc;
+    display: block;
 }
 
-/* Canvas para marca de agua */
+/* Canvas para marca de agua (posicionado sobre el iframe) */
 #watermarkCanvas {
     position: absolute;
-    top:0; left:0;
-    pointer-events: none;
+    top: 0;
+    left: 0;
+    pointer-events: none; /* no intercepta clicks */
+    z-index: 99999;
+    /* inicialmente invisible hasta que se dibuje */
 }
 
-/* Zoom buttons */
+/* controles y botones */
 .controls { 
     margin-bottom:10px; 
     text-align:center; 
@@ -72,7 +74,6 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     background-color: #084298; 
 }
 
-/* Loader */
 #loader {
     display: flex;
     flex-direction: column;
@@ -81,12 +82,38 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     padding: 20px;
 }
 
+/* ===== Impresión: aseguramos que el canvas se imprima por encima ===== */
+@media print {
+    /* aseguramos que todo imprima en página completa */
+    html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+    /* canvas en fixed para que quede en todas las páginas impresas */
+    #watermarkCanvas {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 2147483647 !important; /* máximo z-index */
+        display: block !important;
+    }
+    /* evitamos que elementos flotantes tapen la marca */
+    iframe#pdfFrame {
+        z-index: 1;
+    }
+    /* ocultamos botones y elementos UI en la impresión */
+    .controls, .header-bar, .card-custom form, .btn-custom, #loader {
+        display: none !important;
+    }
+}
 @media (max-width: 768px) {
     .card-custom { padding: 1rem; }
     .header-bar { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-    #visorContainer { max-height: 60vh; }
+    #visorWrapper { max-height: 60vh; }
 }
-
 @media (max-width: 576px) {
     .header-bar { padding: 0.5rem; }
     .logo { max-height: 40px; margin-bottom: 0.5rem; }
@@ -139,7 +166,7 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
 
     <!-- Visor de Documento -->
     <div class="row justify-content-center">
-        <div class="col-12" id="visorContainer" style="display:none;">
+        <div class="col-12" id="visorWrapper" style="display:none;">
             <div class="card card-custom">
                 <h3 class="text-center mb-4">Visor de Documento</h3>
 
@@ -154,9 +181,10 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                 <div class="controls mb-2">
                     <button type="button" class="btn btn-sm btn-secondary" id="zoomIn">+</button>
                     <button type="button" class="btn btn-sm btn-secondary" id="zoomOut">-</button>
+                    <button type="button" class="btn btn-sm btn-danger" id="blockPrintBtn" title="Bloquear impresión">Bloquear Imprimir</button>
                 </div>
 
-                <iframe id="pdfFrame"></iframe>
+                <iframe id="pdfFrame" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
                 <canvas id="watermarkCanvas"></canvas>
             </div>
         </div>
@@ -164,64 +192,232 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
 </div>
 
 <script>
+/* Variables y elementos */
 const iframe = document.getElementById('pdfFrame');
 const canvas = document.getElementById('watermarkCanvas');
 const ctx = canvas.getContext('2d');
+const visorWrapper = document.getElementById('visorWrapper');
+const loader = document.getElementById('loader');
+
 let scale = 1.0;
+let watermarkText = "SIN VALOR";
+let printBlocked = false; // si el usuario presiona "Bloquear Imprimir" cambia a true
 
+/* Dibuja la marca de agua en el canvas que cubre el iframe */
 function drawWatermark() {
+    // dimensionamos canvas al tamaño visible del iframe
     const rect = iframe.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const width = Math.max(rect.width, window.innerWidth);
+    const height = Math.max(rect.height, window.innerHeight);
 
-    ctx.globalAlpha = 0.3;
+    // colocamos el canvas en la posición correcta relativa al contenedor
+    canvas.style.top = rect.top + window.scrollY + 'px';
+    canvas.style.left = rect.left + window.scrollX + 'px';
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+
+    // dibujo
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.globalAlpha = 0.25;
     ctx.fillStyle = "red";
-    ctx.font = `${50 * scale}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    const stepX = 200 * scale;
-    const stepY = 150 * scale;
+    // tamaño de letra dependiente de scale y ancho
+    const baseFont = Math.max(24, Math.floor(50 * scale));
+    ctx.font = `bold ${baseFont}px Arial`;
+
+    const stepX = 250 * scale;
+    const stepY = 180 * scale;
     const angle = -Math.PI / 4;
 
-    for(let y=-canvas.height; y<canvas.height*2; y+=stepY){
-        for(let x=-canvas.width; x<canvas.width*2; x+=stepX){
+    for (let y = -canvas.height; y < canvas.height * 2; y += stepY) {
+        for (let x = -canvas.width; x < canvas.width * 2; x += stepX) {
             ctx.save();
-            ctx.translate(x+stepX/2, y+stepY/2);
+            ctx.translate(x + stepX / 2, y + stepY / 2);
             ctx.rotate(angle);
-            ctx.fillText("SIN VALOR",0,0);
+            ctx.fillText(watermarkText, 0, 0);
             ctx.restore();
         }
     }
+    ctx.restore();
 }
 
-// Zoom buttons
-document.getElementById('zoomIn').onclick = () => { scale *= 1.2; drawWatermark(); };
-document.getElementById('zoomOut').onclick = () => { scale /= 1.2; drawWatermark(); };
+/* Ajustar la marca al resize o scroll */
+function updateOverlayPosition() {
+    // reposicionar canvas para que coincida con el iframe
+    const rect = iframe.getBoundingClientRect();
+    canvas.style.top = rect.top + window.scrollY + 'px';
+    canvas.style.left = rect.left + window.scrollX + 'px';
+    // redibuja para mantener calidad
+    drawWatermark();
+}
 
-// Form submit
+/* Bloqueo de atajos y eventos que puedan descargar/imprimir */
+function setupSecurityBlocks() {
+    // evitar clic derecho en toda la página
+    document.addEventListener('contextmenu', function(e){
+        // permitimos debugging con Shift+RightClick: si shiftKey entonces no bloquear
+        if (e.shiftKey) return;
+        e.preventDefault();
+        Swal.fire({ icon:'warning', title:'Prohibido', text:'Descarga o impresión prohibida' });
+    }, { capture: true });
+
+    // evitar atajos comunes (Ctrl+P, Ctrl+S, Ctrl+Shift+S)
+    document.addEventListener('keydown', function(e){
+        // detecta Ctrl+P, Ctrl+S, Ctrl+Shift+S, Ctrl+U
+        if (e.ctrlKey && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S' || e.key === 'u' || e.key === 'U')) {
+            e.preventDefault();
+            e.stopPropagation();
+            Swal.fire({ icon:'warning', title:'Acción bloqueada', text:'Impresión/Descarga prohibida. La salida incluirá marca de agua.' });
+            // si presionó imprimir, damos opción de continuar con impresión garantizando la marca
+            if (e.key.toLowerCase() === 'p') {
+                // ofrecemos continuar (imprime con watermark) o cancelar
+                Swal.fire({
+                    title: 'Imprimir',
+                    text: 'La impresión incluirá la marca de agua. ¿Desea continuar?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, imprimir',
+                    cancelButtonText: 'Cancelar'
+                }).then(res => {
+                    if (res.isConfirmed) {
+                        // llamamos a print de forma controlada
+                        safePrint();
+                    }
+                });
+            }
+            return false;
+        }
+        // F12 (devtools) no se bloquea aquí porque es contraproducente, pero Shift+F10 (contextmenu) está cubierto por contextmenu handler
+    }, true);
+
+    // bloquear clic derecho dentro del iframe (cuando sea del mismo origen)
+    iframe.addEventListener('load', () => {
+        try {
+            // if same-origin, podemos inyectar listener
+            const ifDoc = iframe.contentDocument || iframe.contentWindow.document;
+            ifDoc.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                Swal.fire({ icon:'warning', title:'Prohibido', text:'Descarga o impresión prohibida' });
+            }, true);
+        } catch (err) {
+            // cross-origin -> no podemos inyectar (pero tu iframe es same-origin en este caso)
+            console.debug('No se pudo inyectar bloqueo en iframe (posible cross-origin):', err);
+        }
+    });
+}
+
+/* Reemplazamos window.print por una versión "segura" que primero garantiza watermark y permite o no la impresión */
+function safePrint() {
+    // Si el usuario marcó "blockPrintBtn" como bloquear impresiones, mostramos prohibido
+    if (printBlocked) {
+        Swal.fire({ icon: 'error', title: 'Prohibido', text: 'La impresión está bloqueada por el administrador.' });
+        return;
+    }
+
+    // Dibujamos watermark y damos un pequeño delay para que esté listo antes de imprimir
+    drawWatermark();
+    // Forzamos repaint
+    setTimeout(() => {
+        try {
+            window.print();
+        } catch (err) {
+            console.debug('Error al iniciar impresión:', err);
+            Swal.fire({ icon:'error', title:'Error', text:'No se pudo iniciar la impresión.' });
+        }
+    }, 250);
+}
+
+/* beforeprint y afterprint: siempre dibujamos watermark antes de imprimir y la limpiamos después */
+window.addEventListener('beforeprint', (ev) => {
+    // Si está bloqueada la impresión, evitamos que el usuario imprima desde el menú
+    if (printBlocked) {
+        // algunos navegadores no respetan preventDefault en beforeprint, así que mostramos alerta y lo dejamos
+        alert('Impresión bloqueada por el administrador.');
+        // no return; dejamos que el navegador haga lo que quiera, pero el usuario ya fue avisado
+    }
+    drawWatermark();
+});
+
+window.addEventListener('afterprint', (ev) => {
+    // opcional: limpiamos la marca (puedes comentarlo si prefieres mantenerla)
+    //ctx.clearRect(0,0,canvas.width, canvas.height);
+});
+
+/* Reemplazo seguro de window.print para cualquier script que intente llamar directametne */
+(function overridePrint(){
+    const originalPrint = window.print;
+    window.print = function() {
+        // Pasamos por safePrint
+        safePrint();
+    };
+    // Si quieres recuperar el original en algún momento: originalPrint();
+})();
+
+/* Botones de zoom: afectan sólo la marca de agua */
+document.getElementById('zoomIn').addEventListener('click', () => { scale *= 1.2; drawWatermark(); });
+document.getElementById('zoomOut').addEventListener('click', () => { scale /= 1.2; drawWatermark(); });
+
+/* Botón para bloquear completamente la impresión (toggle) */
+document.getElementById('blockPrintBtn').addEventListener('click', () => {
+    printBlocked = !printBlocked;
+    document.getElementById('blockPrintBtn').textContent = printBlocked ? 'Imprimir BLOQUEADO' : 'Bloquear Imprimir';
+    document.getElementById('blockPrintBtn').classList.toggle('btn-danger', printBlocked);
+    document.getElementById('blockPrintBtn').classList.toggle('btn-secondary', !printBlocked);
+    Swal.fire({ icon: printBlocked ? 'info' : 'success', title: printBlocked ? 'Impresión bloqueada' : 'Impresión habilitada' });
+});
+
+/* Manejo de carga del PDF en iframe */
 document.getElementById('formConsulta').addEventListener('submit', async function(e){
     e.preventDefault();
     const id = document.getElementById('idDocumento').value.trim();
     const tipo = document.getElementById('tipoDocumento').value;
-    if(!id) return;
+    if (!id) return;
 
     const url = `/descargar/${id}?tipo=${tipo}`;
-    document.getElementById('loader').style.display = 'flex';
-    document.getElementById('visorContainer').style.display = 'block';
+    visorWrapper.style.display = 'block';
+    loader.style.display = 'flex';
 
-    try {
-        iframe.src = url;
-        iframe.onload = () => {
-            document.getElementById('loader').style.display = 'none';
-            drawWatermark();
-        };
-    } catch(err){
-        Swal.fire({ icon:'error', title:'Error', text: err.message });
-        document.getElementById('visorContainer').style.display = 'none';
-    }
+    // cargamos el iframe y configuramos onload
+    iframe.src = url;
+    // forzamos que el canvas se redimensione cuando cambie tamaño de la ventana o scroll
+    iframe.onload = () => {
+        loader.style.display = 'none';
+        // dibuja overlay con la marca inmediatamente
+        setTimeout(() => { drawWatermark(); }, 150);
+        // intentar inyectar listener de contextmenu si el iframe es same-origin (opcional)
+        try {
+            const ifDoc = iframe.contentDocument || iframe.contentWindow.document;
+            ifDoc.addEventListener('keydown', (e) => {
+                /* opcional: bloquear Ctrl+S o Ctrl+P dentro del PDF */
+                if (e.ctrlKey && (e.key === 'p' || e.key === 's')) {
+                    e.preventDefault();
+                    Swal.fire({ icon:'warning', title:'Prohibido', text:'Impresión/Descarga prohibida' });
+                }
+            }, true);
+        } catch (err) {
+            // cross-origin -> no podemos inyectar, pero la overlay ayuda en impresión
+        }
+    };
 });
+
+/* Mantenemos overlay alineado al scrolleo y cambios de tamaño */
+window.addEventListener('scroll', updateOverlayPosition);
+window.addEventListener('resize', () => {
+    drawWatermark();
+});
+
+/* Inicializamos bloqueos de seguridad */
+setupSecurityBlocks();
+
+/* Nota: si quieres registro de auditoría cliente, aquí podrías enviar fetch a tu endpoint de auditoría
+   cada vez que se intente imprimir/descargar para dejar rastro. Por ejemplo:
+   fetch('/auditar_intento', { method:'POST', body: JSON.stringify({ id, tipo, accion:'imprimir_intento' }) })
+*/
 </script>
 </body>
 </html>
