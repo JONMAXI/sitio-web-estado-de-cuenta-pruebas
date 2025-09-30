@@ -373,25 +373,38 @@ def documentos():
 
 
 def agregar_watermark(pdf_bytes: BytesIO, watermark_text="SIN VALOR") -> BytesIO:
-    """Agrega watermark en diagonal a cada página del PDF en memoria."""
-    # Crear PDF del watermark
-    packet = io.BytesIO()
-    can = canvas.Canvas(packet, pagesize=letter)
-    can.setFont("Helvetica-Bold", 50)
-    can.setFillColorRGB(1, 0, 0, alpha=0.3)
-    can.saveState()
-    can.translate(300, 400)
-    can.rotate(45)
-    can.drawCentredString(0, 0, watermark_text)
-    can.restoreState()
-    can.save()
-    packet.seek(0)
+    """Agrega watermark diagonal repetido a cada página del PDF."""
+    from PyPDF2 import PdfReader, PdfWriter
+    from reportlab.pdfgen import canvas
+    import io
 
-    watermark_pdf = PdfReader(packet)
     reader = PdfReader(pdf_bytes)
     writer = PdfWriter()
 
     for page in reader.pages:
+        # Obtener tamaño de la página
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
+
+        # Crear watermark temporal del tamaño exacto de la página
+        packet = io.BytesIO()
+        can = canvas.Canvas(packet, pagesize=(width, height))
+        can.setFont("Helvetica-Bold", 50)
+        can.setFillColorRGB(1, 0, 0, alpha=0.3)
+        step_x = 200
+        step_y = 150
+        angle = -45
+        for y in range(-int(height), int(height*2), step_y):
+            for x in range(-int(width), int(width*2), step_x):
+                can.saveState()
+                can.translate(x + step_x/2, y + step_y/2)
+                can.rotate(angle)
+                can.drawCentredString(0, 0, watermark_text)
+                can.restoreState()
+        can.save()
+        packet.seek(0)
+
+        watermark_pdf = PdfReader(packet)
         page.merge_page(watermark_pdf.pages[0])
         writer.add_page(page)
 
@@ -399,7 +412,6 @@ def agregar_watermark(pdf_bytes: BytesIO, watermark_text="SIN VALOR") -> BytesIO
     writer.write(salida)
     salida.seek(0)
     return salida
-
 @app.route('/descargar/<id>')
 def descargar(id):
     if 'usuario' not in session:
