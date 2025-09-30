@@ -123,7 +123,8 @@ def procesar_estado_cuenta(estado_cuenta):
                 "remaining": monto_real,
                 "cuotas": cuotas,
                 "fechaValor": p.get("fechaValor"),
-                "fechaRegistro": p.get("fechaRegistro"),
+                # ****** aquí se cambia fechaRegistro por fechaDeposito ******
+                "fechaRegistro": p.get("fechaDeposito") or p.get("fechaRegistro"),
                 "montoPagoOriginal": monto_pago,
                 "extemporaneos": extemporaneos,
                 "_extemporaneo_aplicado": False  # marcador para evitar duplicados
