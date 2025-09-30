@@ -37,12 +37,14 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     max-height: 80vh;
 }
 
+/* Iframe PDF */
 #pdfFrame {
     width: 100%;
     height: 80vh;
     border:1px solid #ccc;
 }
 
+/* Canvas para marca de agua */
 #watermarkCanvas {
     position: absolute;
     top:0; left:0;
@@ -51,6 +53,7 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     pointer-events: none; /* permite interacción con videos */
 }
 
+/* Loader */
 #loader {
     display: flex;
     flex-direction: column;
@@ -99,6 +102,7 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
 </div>
 
 <div class="container py-2">
+    <!-- Formulario -->
     <div class="row justify-content-center">
         <div class="col-12 col-md-8">
             <div class="card card-custom">
@@ -124,11 +128,13 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
         </div>
     </div>
 
+    <!-- Visor de Documento -->
     <div class="row justify-content-center">
         <div class="col-12" id="visorContainer" style="display:none;">
             <div class="card card-custom" style="position:relative;">
                 <h3 class="text-center mb-4">Visor de Documento</h3>
 
+                <!-- Loader -->
                 <div id="loader" style="display:none;">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Cargando...</span>
@@ -136,6 +142,7 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                     <div>Cargando documento...</div>
                 </div>
 
+                <!-- Iframe PDF con sandbox para limitar descarga/impresión -->
                 <iframe id="pdfFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
                 <canvas id="watermarkCanvas"></canvas>
             </div>
@@ -149,6 +156,7 @@ const canvas = document.getElementById('watermarkCanvas');
 const ctx = canvas.getContext('2d');
 let scale = 1.0;
 
+// Dibuja la marca de agua
 function drawWatermark() {
     const rect = iframe.getBoundingClientRect();
     canvas.width = rect.width;
@@ -175,23 +183,6 @@ function drawWatermark() {
         }
     }
 }
-
-// Bloqueo dinámico de botones PDFJS
-const disablePDFTools = () => {
-    const observer = new MutationObserver(() => {
-        const buttons = document.querySelectorAll(
-            '#editorModeButtons button, #secondaryToolbar button'
-        );
-        buttons.forEach(btn => {
-            btn.disabled = true;
-            btn.style.pointerEvents = 'none';
-            btn.style.opacity = '0.4';
-        });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-};
-
-document.addEventListener('DOMContentLoaded', disablePDFTools);
 
 // Form submit
 document.getElementById('formConsulta').addEventListener('submit', async function(e){
