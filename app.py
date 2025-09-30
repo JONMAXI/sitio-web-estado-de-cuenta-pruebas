@@ -152,10 +152,6 @@ def documentos():
     return render_template("consulta_documentos.html")
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
-def _content_disposition_inline(filename: str) -> str:
-    q = urllib.parse.quote(filename)
-    return f'inline; filename="{filename}"; filename*=UTF-8\'\'{q}'
-
 @app.route('/descargar/<id>')
 def descargar(id):
     if 'usuario' not in session:
@@ -165,6 +161,41 @@ def descargar(id):
     usuario = session['usuario']['username']
 
     try:
+        # ------------------ Función interna para agregar marca de agua ------------------
+        from PyPDF2 import PdfReader, PdfWriter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from io import BytesIO
+
+        def agregar_marca_agua(pdf_bytes: BytesIO, texto="SIN VALOR") -> BytesIO:
+            pdf_bytes.seek(0)
+            lector = PdfReader(pdf_bytes)
+            escritor = PdfWriter()
+
+            for pagina in lector.pages:
+                # Crear una marca de agua temporal
+                packet = BytesIO()
+                can = canvas.Canvas(packet, pagesize=letter)
+                can.setFont("Helvetica-Bold", 50)
+                can.setFillColorRGB(1, 0, 0, alpha=0.3)  # rojo con transparencia
+                can.saveState()
+                can.translate(300, 400)
+                can.rotate(45)
+                can.drawCentredString(0, 0, texto)
+                can.restoreState()
+                can.save()
+                packet.seek(0)
+
+                watermark = PdfReader(packet)
+                pagina.merge_page(watermark.pages[0])
+                escritor.add_page(pagina)
+
+            out_bytes = BytesIO()
+            escritor.write(out_bytes)
+            out_bytes.seek(0)
+            return out_bytes
+        # ------------------------------------------------------------------------------
+
         if tipo == 'INE':
             fecha_corte = datetime.now().strftime("%Y-%m-%d")
             payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
@@ -186,93 +217,148 @@ def descargar(id):
             r1 = requests.get(url_frente, timeout=10)
             r2 = requests.get(url_reverso, timeout=10)
 
-            if r1.status_code != 200 or r2.status_code != 200:
-                return "No se encontraron imágenes INE", 404
+            faltantes = []
+            if r1.status_code != 200:
+                faltantes.append("Frente")
+            if r2.status_code != 200:
+                faltantes.append("Reverso")
+            if faltantes:
+                auditar_documento(usuario, "INE", "INE completo", id, 0, f"No se encontraron los archivos: {', '.join(faltantes)}")
+                return f"No se encontraron los archivos: {', '.join(faltantes)}", 404
 
+            # Convertir imágenes a PDF
             img1 = Image.open(BytesIO(r1.content)).convert("RGB")
             img2 = Image.open(BytesIO(r2.content)).convert("RGB")
+            img1.info['dpi'] = (150, 150)
+            img2.info['dpi'] = (150, 150)
             pdf_bytes = BytesIO()
             img1.save(pdf_bytes, format='PDF', save_all=True, append_images=[img2])
             pdf_bytes.seek(0)
 
+            # Agregar marca de agua
+            pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
+
             auditar_documento(usuario, "INE", "INE completo", id, 1, None)
             filename = f"{id}_INE.pdf"
-            pdf_final = agregar_marca_agua(pdf_bytes.read())
-            return Response(pdf_final, mimetype='application/pdf',
-                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+            return Response(
+                pdf_bytes_con_marca.read(),
+                mimetype='application/pdf',
+                headers={"Content-Disposition": _content_disposition_inline(filename)}
+            )
 
         elif tipo == 'Factura':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
+                auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
                 return "Archivo Factura no encontrado", 404
 
-            auditar_documento(usuario, "Factura", "Factura", id, 1, None)
+            pdf_bytes = BytesIO(r.content)
+            pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
+
+            auditar_documento(usuario, "Factura", "Factura completo", id, 1, None)
             filename = f"{id}_factura.pdf"
-            pdf_final = agregar_marca_agua(r.content)
-            return Response(pdf_final, mimetype='application/pdf',
-                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+            return Response(
+                pdf_bytes_con_marca.read(),
+                mimetype='application/pdf',
+                headers={"Content-Disposition": _content_disposition_inline(filename)}
+            )
 
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
-                return "Contrato no encontrado", 404
+                auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 0, "Cliente no encontrado en la Base de Datos")
+                return "Cliente no encontrado en la Base de Datos", 404
+
+            pdf_bytes = BytesIO(r.content)
+            pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
 
             auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 1, None)
             filename = f"{id}_validaciones.pdf"
-            pdf_final = agregar_marca_agua(r.content)
-            return Response(pdf_final, mimetype='application/pdf',
-                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+            return Response(
+                pdf_bytes_con_marca.read(),
+                mimetype='application/pdf',
+                headers={"Content-Disposition": _content_disposition_inline(filename)}
+            )
 
         elif tipo == 'FAD_DOC':
+            try:
+                pk = int(id)
+            except ValueError:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "ID inválido para FAD_DOC")
+                return "ID inválido", 400
+
             sql = """
             SELECT nombre_archivo
             FROM oferta_documentos
             WHERE tipo_documento = 'FAD' AND fk_oferta = %s
             """
             with get_connection(database=DB3_NAME, use_rds=True) as conn:
+                if not conn:
+                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "No se pudo conectar a la DB")
+                    return "Error de conexión con la base de datos", 500
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(sql, (int(id),))
+                cursor.execute(sql, (pk,))
                 row = cursor.fetchone()
                 cursor.close()
 
-            if not row:
-                return "Documento no encontrado en DB", 404
+            if not row or not row.get("nombre_archivo"):
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "Documento no encontrado o sin nombre")
+                return "Documento no encontrado en la base de datos", 404
 
-            nombre_archivo = row.get("nombre_archivo")
-            safe_name = os.path.basename(nombre_archivo)
+            safe_name = os.path.basename(row["nombre_archivo"])
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FAD/{urllib.parse.quote(safe_name)}"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Archivo {safe_name} no encontrado en S3")
                 return "Archivo no encontrado en S3", 404
 
             _, ext = os.path.splitext(safe_name.lower())
-            if ext == '.pdf':
-                pdf_final = agregar_marca_agua(r.content)
-                return Response(pdf_final, mimetype='application/pdf',
-                                headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
-            elif ext in ('.jpg', '.jpeg', '.png'):
+            if ext == '.pdf':
+                pdf_bytes = BytesIO(r.content)
+                pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                return Response(
+                    pdf_bytes_con_marca.read(),
+                    mimetype='application/pdf',
+                    headers={"Content-Disposition": _content_disposition_inline(safe_name)}
+                )
+
+            elif ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'):
                 img = Image.open(BytesIO(r.content)).convert("RGB")
+                img.info['dpi'] = (150, 150)
                 pdf_bytes = BytesIO()
                 img.save(pdf_bytes, format='PDF')
                 pdf_bytes.seek(0)
-                pdf_final = agregar_marca_agua(pdf_bytes.read())
-                return Response(pdf_final, mimetype='application/pdf',
-                                headers={"Content-Disposition": _content_disposition_inline(safe_name.replace(ext, '.pdf'))})
+
+                pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                filename = os.path.splitext(safe_name)[0] + '.pdf'
+                return Response(
+                    pdf_bytes_con_marca.read(),
+                    mimetype='application/pdf',
+                    headers={"Content-Disposition": _content_disposition_inline(filename)}
+                )
 
             else:
-                return Response(r.content, mimetype='application/octet-stream',
-                                headers={"Content-Disposition": _content_disposition_inline(safe_name)})
+                # Archivos desconocidos -> solo descargar binario
+                ctype = r.headers.get('Content-Type') or mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                return Response(
+                    r.content,
+                    mimetype=ctype,
+                    headers={"Content-Disposition": _content_disposition_inline(safe_name)}
+                )
 
         else:
+            auditar_documento(usuario, tipo, tipo, id, 0, "Tipo de documento no válido")
             return "Tipo de documento no válido", 400
 
     except Exception as e:
-        print(f"[ERROR DESCARGAR] {e}")
-        return "Error interno en descarga", 500
-
+        auditar_documento(usuario, tipo, tipo, id, 0, f"Error interno: {e}")
+        return "Error interno al procesar el documento", 500
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
