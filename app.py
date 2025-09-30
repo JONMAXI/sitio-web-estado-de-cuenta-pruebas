@@ -11,10 +11,6 @@ from db_queries import obtener_datos_cliente
 from db_queries import DB3_NAME
 import mimetypes
 import urllib.parse
-from PyPDF2 import PdfReader, PdfWriter
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-import tempfile
 
 app = Flask(__name__)
 app.secret_key = 'clave_super_secreta'
@@ -69,45 +65,6 @@ def safe_date(date_str, fmt="%Y-%m-%d %H:%M:%S"):
     except (ValueError, TypeError):
         return None
 
-# ------------------ MARCA DE AGUA ------------------
-def agregar_marca_agua(pdf_bytes: bytes, texto="SIN VALOR") -> bytes:
-    """
-    Recibe un PDF en bytes, le agrega marca de agua diagonal 'SIN VALOR'
-    y devuelve los bytes del nuevo PDF.
-    """
-    try:
-        # Crear PDF temporal con marca de agua
-        tmp_watermark = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        c = canvas.Canvas(tmp_watermark.name, pagesize=letter)
-        c.saveState()
-        c.setFont("Helvetica-Bold", 60)
-        c.setFillGray(0.6, 0.5)  # gris semitransparente
-        c.translate(300, 400)
-        c.rotate(45)
-        c.drawCentredString(0, 0, texto)
-        c.restoreState()
-        c.save()
-        tmp_watermark.close()
-
-        # Mezclar con el PDF original
-        original_reader = PdfReader(BytesIO(pdf_bytes))
-        watermark_reader = PdfReader(tmp_watermark.name)
-        writer = PdfWriter()
-
-        watermark_page = watermark_reader.pages[0]
-        for page in original_reader.pages:
-            page.merge_page(watermark_page)
-            writer.add_page(page)
-
-        output = BytesIO()
-        writer.write(output)
-        output.seek(0)
-        return output.read()
-
-    except Exception as e:
-        print(f"[MARCA DE AGUA] Error: {e}")
-        return pdf_bytes
-
 # ------------------ AUDITORÍA ------------------
 def auditar_estado_cuenta(usuario, id_credito, fecha_corte, exito, mensaje_error=None):
     try:
@@ -140,10 +97,265 @@ def auditar_documento(usuario, documento_clave, documento_nombre, id_referencia,
         print(f"[AUDITORIA] Error registrando documento: {e}")
 
 # ------------------ PROCESAR ESTADO DE CUENTA ------------------
-# (Mantengo tu función procesar_estado_cuenta igual, no la repito aquí por espacio)
+# ------------------ PROCESAR ESTADO DE CUENTA ------------------
+def procesar_estado_cuenta(estado_cuenta):
+    try:
+        # Obtenemos cargos y pagos del estado de cuenta
+        cargos = estado_cuenta.get("datosCargos") or []
+        if not isinstance(cargos, list):
+            cargos = []
+
+        pagos = estado_cuenta.get("datosPagos") or []
+        if not isinstance(pagos, list):
+            pagos = []
+
+        pagos_list = []
+
+        # ------------------ PREPARAR PAGOS ------------------
+        for p in pagos:
+            monto_pago = safe_float(p.get("montoPago"), 0.0)
+            extemporaneos = safe_float(p.get("extemporaneos"), 0.0)
+            monto_real = max(monto_pago - extemporaneos, 0.0)
+            cuotas = _parse_cuotas_field(p.get("numeroCuotaSemanal"))
+
+            pagos_list.append({
+                "idPago": p.get("idPago"),
+                "remaining": monto_real,
+                "cuotas": cuotas,
+                "fechaValor": p.get("fechaValor"),
+                "fechaRegistro": p.get("fechaRegistro"),
+                "montoPagoOriginal": monto_pago,
+                "extemporaneos": extemporaneos,
+                "_extemporaneo_aplicado": False  # marcador para evitar duplicados
+            })
+
+        # ------------------ ORDENAR CARGOS ------------------
+        cargos_sorted = sorted(cargos, key=lambda c: safe_int(c.get("idCargo"), 0))
+        tabla = []
+
+        # ------------------ PROCESAR CADA CARGO ------------------
+        for cargo in cargos_sorted:
+            concepto = cargo.get("concepto", "")
+            cuota_num = _extraer_numero_cuota(concepto)
+            if cuota_num is None:
+                cuota_num = safe_int(cargo.get("idCargo"))
+
+            monto_cargo = safe_float(cargo.get("monto"))
+            capital = safe_float(cargo.get("capital"))
+            interes = safe_float(cargo.get("interes"))
+            seguro_total = sum(safe_float(cargo.get(k)) for k in ["seguroBienes", "seguroVida", "seguroDesempleo"])
+            fecha_venc = cargo.get("fechaVencimiento")
+
+            monto_restante_cargo = monto_cargo
+            aplicados = []
+
+            # ------------------ APLICAR PAGOS A LA CUOTA ------------------
+            for pago in pagos_list:
+                if cuota_num not in pago["cuotas"]:
+                    continue
+
+                # Aplicar monto real del pago
+                if monto_restante_cargo > 0 and pago["remaining"] > 0:
+                    aplicar = min(pago["remaining"], monto_restante_cargo)
+                    aplicados.append({
+                        "idPago": pago.get("idPago"),
+                        "montoPago": round(pago["remaining"], 2),
+                        "aplicado": round(aplicar, 2),
+                        "fechaRegistro": pago.get("fechaRegistro"),
+                        "fechaPago": fecha_venc,
+                        "diasMora": None,
+                        "extemporaneos": 0.0
+                    })
+                    pago["remaining"] = max(round(pago["remaining"] - aplicar, 2), 0)
+                    monto_restante_cargo = max(round(monto_restante_cargo - aplicar, 2), 0)
+
+                # Registrar extemporáneos solo una vez por pago
+                if pago.get("extemporaneos", 0.0) > 0 and not pago["_extemporaneo_aplicado"]:
+                    aplicados.append({
+                        "idPago": pago.get("idPago"),
+                        "montoPago": round(pago["extemporaneos"], 2),
+                        "aplicado": round(pago["extemporaneos"], 2),
+                        "fechaRegistro": pago.get("fechaRegistro"),
+                        "fechaPago": fecha_venc,
+                        "diasMora": None,
+                        "extemporaneos": pago.get("extemporaneos", 0.0)
+                    })
+                    pago["_extemporaneo_aplicado"] = True  # marcamos como aplicado
+
+            total_aplicado = round(monto_cargo - monto_restante_cargo, 2)
+            pendiente = round(max(monto_cargo - total_aplicado, 0.0), 2)
+            excedente = max(round(total_aplicado - monto_cargo, 2), 0.0)
+
+            tabla.append({
+                "cuota": cuota_num,
+                "fecha": fecha_venc,
+                "monto_cargo": round(monto_cargo, 2),
+                "capital": round(capital, 2),
+                "interes": round(interes, 2),
+                "seguro": round(seguro_total, 2),
+                "aplicados": aplicados,
+                "total_pagado": total_aplicado,
+                "pendiente": pendiente,
+                "excedente": excedente,
+                "raw_cargo": cargo
+            })
+
+        return tabla
+
+    except Exception as e:
+        print(f"[ERROR] procesar_estado_cuenta: {e}")
+        return []
+
+
+# ------------------ BÚSQUEDA DE CRÉDITO ------------------
+def buscar_credito_por_nombre(nombre):
+    db_clientes = os.environ.get('DB_NAME_CLIENTES')
+    if not db_clientes:
+        print("[DB ERROR] Variable de entorno DB_NAME_CLIENTES no definida")
+        return []
+
+    query = """
+        SELECT id_credito, id_cliente, Nombre_cliente, Fecha_inicio
+        FROM lista_cliente
+        WHERE Nombre_cliente LIKE %s
+        LIMIT 1000
+    """
+    resultados = []
+    with get_connection(db_clientes) as conn:
+        if conn:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query, (f"%{nombre}%",))
+            resultados = cursor.fetchall()
+            cursor.close()
+    return resultados
 
 # ------------------ RUTAS ------------------
-# (Mantengo login, logout e index igual, no los repito aquí por espacio)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = hashlib.sha256(request.form['password'].encode()).hexdigest()
+        try:
+            with get_connection() as conn:
+                if not conn:
+                    return "Error de conexión a la base de datos", 500
+                cur = conn.cursor(dictionary=True)
+                cur.execute("SELECT * FROM usuarios WHERE username = %s AND password = %s", (username, password))
+                user = cur.fetchone()
+                cur.close()
+        except Exception as err:
+            return f"Error de conexión a MySQL: {err}"
+
+        if user:
+            session['usuario'] = {
+                'username': user['username'],
+                'nombre_completo': user['nombre_completo'],
+                'puesto': user['puesto'],
+                'grupo': user['grupo']
+            }
+            return redirect('/')
+        else:
+            return render_template("login.html", error="Credenciales inválidas")
+    return render_template("login.html")
+
+@app.route('/logout')
+def logout():
+    session.pop('usuario', None)
+    return redirect('/login')
+#----------------------------------------------------
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if 'usuario' not in session:
+        return redirect('/login')
+
+    fecha_actual_iso = datetime.now().strftime("%Y-%m-%d")
+
+    if request.method == 'POST':
+        nombre_busqueda = request.form.get('nombre', '').strip()
+        id_credito_form = request.form.get('idCredito', '').strip()
+        fecha_corte = request.form.get('fechaCorte', '').strip() or fecha_actual_iso
+
+        # Validación de fecha
+        try:
+            datetime.strptime(fecha_corte, "%Y-%m-%d")
+        except ValueError as ve:
+            print(f"[DEBUG] Fecha inválida: {ve}")
+            return render_template("index.html", error="Fecha inválida", fecha_actual_iso=fecha_corte)
+
+        # Búsqueda por nombre o ID
+        resultados = []
+        try:
+            if nombre_busqueda:
+                resultados = buscar_credito_por_nombre(nombre_busqueda)
+                if not resultados:
+                    return render_template("index.html", error="No se encontraron créditos con ese nombre", fecha_actual_iso=fecha_corte)
+                if len(resultados) > 1:
+                    return render_template("index.html", resultados=resultados, fecha_actual_iso=fecha_corte)
+                id_credito = resultados[0]['id_credito']
+            elif id_credito_form:
+                try:
+                    id_credito = int(id_credito_form)
+                except ValueError as ve:
+                    print(f"[DEBUG] ID de crédito inválido: {ve}")
+                    return render_template("index.html", error="ID de crédito inválido", fecha_actual_iso=fecha_corte)
+            else:
+                return render_template("index.html", error="Debes proporcionar nombre o ID de crédito", fecha_actual_iso=fecha_corte)
+        except Exception as e:
+            print(f"[DEBUG] Error buscando crédito: {e}")
+            return render_template("index.html", error="Error buscando crédito", fecha_actual_iso=fecha_corte)
+
+        # Llamada API externa
+        payload = {"idCredito": int(id_credito), "fechaCorte": fecha_corte}
+        headers = {"Token": TOKEN, "Content-Type": "application/json"}
+        try:
+            res = requests.post(ENDPOINT, json=payload, headers=headers, timeout=15)
+            data = res.json()
+        except Exception as e:
+            print(f"[DEBUG] Error llamando API externa: {e}")
+            auditar_estado_cuenta(session['usuario']['username'], id_credito, fecha_corte, 0, "Respuesta no válida del servidor")
+            return render_template("resultado.html", error="Respuesta no válida del servidor")
+
+        if res.status_code != 200 or "estadoCuenta" not in data:
+            mensaje = data.get("mensaje", ["Error desconocido"])[0] if data else "No se encontraron datos para este crédito"
+            auditar_estado_cuenta(session['usuario']['username'], id_credito, fecha_corte, 0, mensaje)
+            print(f"[DEBUG] API retornó error o datos faltantes: {mensaje}")
+            return render_template("resultado.html", error=mensaje)
+
+        estado_cuenta = data["estadoCuenta"]
+        if (
+            not estado_cuenta.get("idCredito")
+            and not estado_cuenta.get("datosCliente")
+            and not estado_cuenta.get("datosCargos")
+            and not estado_cuenta.get("datosPagos")
+        ):
+            auditar_estado_cuenta(session['usuario']['username'], id_credito, fecha_corte, 0, "Crédito vacío")
+            print(f"[DEBUG] Crédito vacío para id_credito={id_credito}")
+            return render_template("resultado.html", usuario_no_existe=True)
+
+        # -------------------- Traer datos de referencias con debug --------------------
+        try:
+            datos_referencias = obtener_datos_cliente(id_credito)
+            if not datos_referencias:
+                print(f"[DEBUG] No se encontraron referencias para id_credito={id_credito}")
+            estado_cuenta["datosReferencias"] = datos_referencias or {}
+        except Exception as e:
+            print(f"[DEBUG] Error al obtener datos de referencias para id_credito={id_credito}: {e}")
+            estado_cuenta["datosReferencias"] = {}
+        # ----------------------------------------------------------------------
+
+        try:
+            auditar_estado_cuenta(session['usuario']['username'], id_credito, fecha_corte, 1, None)
+            tabla = procesar_estado_cuenta(estado_cuenta)
+        except Exception as e:
+            print(f"[DEBUG] Error procesando estado de cuenta para id_credito={id_credito}: {e}")
+            return render_template("resultado.html", error="Error procesando estado de cuenta")
+
+        return render_template("resultado.html", datos=estado_cuenta, resultado=tabla)
+
+    # GET
+    return render_template("index.html", fecha_actual_iso=fecha_actual_iso)
+####-----------------------------------------------------------------------------------
 
 @app.route('/documentos', methods=['GET', 'POST'])
 def documentos():
@@ -152,6 +364,11 @@ def documentos():
     return render_template("consulta_documentos.html")
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
+def _content_disposition_inline(filename: str) -> str:
+    q = urllib.parse.quote(filename)
+    # Incluye ambos para compatibilidad con navegadores
+    return f'inline; filename="{filename}"; filename*=UTF-8\'\'{q}'
+
 @app.route('/descargar/<id>')
 def descargar(id):
     if 'usuario' not in session:
@@ -161,41 +378,6 @@ def descargar(id):
     usuario = session['usuario']['username']
 
     try:
-        # ------------------ Función interna para agregar marca de agua ------------------
-        from PyPDF2 import PdfReader, PdfWriter
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import letter
-        from io import BytesIO
-
-        def agregar_marca_agua(pdf_bytes: BytesIO, texto="SIN VALOR") -> BytesIO:
-            pdf_bytes.seek(0)
-            lector = PdfReader(pdf_bytes)
-            escritor = PdfWriter()
-
-            for pagina in lector.pages:
-                # Crear una marca de agua temporal
-                packet = BytesIO()
-                can = canvas.Canvas(packet, pagesize=letter)
-                can.setFont("Helvetica-Bold", 50)
-                can.setFillColorRGB(1, 0, 0, alpha=0.3)  # rojo con transparencia
-                can.saveState()
-                can.translate(300, 400)
-                can.rotate(45)
-                can.drawCentredString(0, 0, texto)
-                can.restoreState()
-                can.save()
-                packet.seek(0)
-
-                watermark = PdfReader(packet)
-                pagina.merge_page(watermark.pages[0])
-                escritor.add_page(pagina)
-
-            out_bytes = BytesIO()
-            escritor.write(out_bytes)
-            out_bytes.seek(0)
-            return out_bytes
-        # ------------------------------------------------------------------------------
-
         if tipo == 'INE':
             fecha_corte = datetime.now().strftime("%Y-%m-%d")
             payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
@@ -226,7 +408,6 @@ def descargar(id):
                 auditar_documento(usuario, "INE", "INE completo", id, 0, f"No se encontraron los archivos: {', '.join(faltantes)}")
                 return f"No se encontraron los archivos: {', '.join(faltantes)}", 404
 
-            # Convertir imágenes a PDF
             img1 = Image.open(BytesIO(r1.content)).convert("RGB")
             img2 = Image.open(BytesIO(r2.content)).convert("RGB")
             img1.info['dpi'] = (150, 150)
@@ -235,13 +416,10 @@ def descargar(id):
             img1.save(pdf_bytes, format='PDF', save_all=True, append_images=[img2])
             pdf_bytes.seek(0)
 
-            # Agregar marca de agua
-            pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
-
             auditar_documento(usuario, "INE", "INE completo", id, 1, None)
             filename = f"{id}_INE.pdf"
             return Response(
-                pdf_bytes_con_marca.read(),
+                pdf_bytes.read(),
                 mimetype='application/pdf',
                 headers={"Content-Disposition": _content_disposition_inline(filename)}
             )
@@ -251,18 +429,12 @@ def descargar(id):
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
                 auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
-                return "Archivo Factura no encontrado", 404
+                return "Archivo CEP no encontrado", 404
 
-            pdf_bytes = BytesIO(r.content)
-            pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
-
-            auditar_documento(usuario, "Factura", "Factura completo", id, 1, None)
+            auditar_documento(usuario, "Factura", " completo", id, 1, None)
             filename = f"{id}_factura.pdf"
-            return Response(
-                pdf_bytes_con_marca.read(),
-                mimetype='application/pdf',
-                headers={"Content-Disposition": _content_disposition_inline(filename)}
-            )
+            return Response(r.content, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
@@ -271,18 +443,13 @@ def descargar(id):
                 auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 0, "Cliente no encontrado en la Base de Datos")
                 return "Cliente no encontrado en la Base de Datos", 404
 
-            pdf_bytes = BytesIO(r.content)
-            pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
-
             auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 1, None)
             filename = f"{id}_validaciones.pdf"
-            return Response(
-                pdf_bytes_con_marca.read(),
-                mimetype='application/pdf',
-                headers={"Content-Disposition": _content_disposition_inline(filename)}
-            )
+            return Response(r.content, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         elif tipo == 'FAD_DOC':
+            # pk_oferta_documentos viene en la ruta <id>
             try:
                 pk = int(id)
             except ValueError:
@@ -303,54 +470,53 @@ def descargar(id):
                 row = cursor.fetchone()
                 cursor.close()
 
-            if not row or not row.get("nombre_archivo"):
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "Documento no encontrado o sin nombre")
+            if not row:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "Documento no encontrado en la base")
                 return "Documento no encontrado en la base de datos", 404
 
-            safe_name = os.path.basename(row["nombre_archivo"])
+            nombre_archivo = row.get("nombre_archivo")
+            if not nombre_archivo:
+                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "El documento no tiene nombre asociado")
+                return "El documento no tiene nombre asociado", 404
+
+            # normalizar/sanitizar el nombre (evita rutas)
+            safe_name = os.path.basename(nombre_archivo)
+            # URL S3 con carpeta FAD/
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FAD/{urllib.parse.quote(safe_name)}"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
                 auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Archivo {safe_name} no encontrado en S3")
                 return "Archivo no encontrado en S3", 404
 
+            # Determinar por extensión
             _, ext = os.path.splitext(safe_name.lower())
 
             if ext == '.pdf':
-                pdf_bytes = BytesIO(r.content)
-                pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
                 auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
-                return Response(
-                    pdf_bytes_con_marca.read(),
-                    mimetype='application/pdf',
-                    headers={"Content-Disposition": _content_disposition_inline(safe_name)}
-                )
+                return Response(r.content, mimetype='application/pdf',
+                                headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
             elif ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'):
-                img = Image.open(BytesIO(r.content)).convert("RGB")
-                img.info['dpi'] = (150, 150)
-                pdf_bytes = BytesIO()
-                img.save(pdf_bytes, format='PDF')
-                pdf_bytes.seek(0)
-
-                pdf_bytes_con_marca = agregar_marca_agua(pdf_bytes, "SIN VALOR")
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
-                filename = os.path.splitext(safe_name)[0] + '.pdf'
-                return Response(
-                    pdf_bytes_con_marca.read(),
-                    mimetype='application/pdf',
-                    headers={"Content-Disposition": _content_disposition_inline(filename)}
-                )
+                try:
+                    img = Image.open(BytesIO(r.content)).convert("RGB")
+                    img.info['dpi'] = (150, 150)
+                    pdf_bytes = BytesIO()
+                    img.save(pdf_bytes, format='PDF')
+                    pdf_bytes.seek(0)
+                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                    filename = os.path.splitext(safe_name)[0] + '.pdf'
+                    return Response(pdf_bytes.read(), mimetype='application/pdf',
+                                    headers={"Content-Disposition": _content_disposition_inline(filename)})
+                except Exception as e:
+                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Error al convertir imagen a PDF: {e}")
+                    return "Error al procesar el archivo", 500
 
             else:
-                # Archivos desconocidos -> solo descargar binario
+                # Tipo desconocido -> intentar usar Content-Type o devolver binario
                 ctype = r.headers.get('Content-Type') or mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
                 auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
-                return Response(
-                    r.content,
-                    mimetype=ctype,
-                    headers={"Content-Disposition": _content_disposition_inline(safe_name)}
-                )
+                return Response(r.content, mimetype=ctype,
+                                headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
         else:
             auditar_documento(usuario, tipo, tipo, id, 0, "Tipo de documento no válido")
@@ -358,7 +524,8 @@ def descargar(id):
 
     except Exception as e:
         auditar_documento(usuario, tipo, tipo, id, 0, f"Error interno: {e}")
-        return "Error interno al procesar el documento", 500
+        return "Cliente no encontrado en la Base de Datos", 500
+
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
