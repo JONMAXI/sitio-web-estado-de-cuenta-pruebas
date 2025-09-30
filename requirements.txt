@@ -3,3 +3,5 @@ gunicorn
 mysql-connector-python
 requests
 Pillow==10.0.1
+PyPDF2
+reportlab
