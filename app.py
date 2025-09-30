@@ -12,6 +12,11 @@ from db_queries import DB3_NAME
 import mimetypes
 import urllib.parse
 
+
+from PyPDF2 import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+
 app = Flask(__name__)
 app.secret_key = 'clave_super_secreta'
 
@@ -365,10 +370,7 @@ def documentos():
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
 # ------------------ DESCARGA DE DOCUMENTOS CON WATERMARK ------------------
-from PyPDF2 import PdfReader, PdfWriter
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-import io
+
 
 def agregar_watermark(pdf_bytes: BytesIO, watermark_text="SIN VALOR") -> BytesIO:
     """Agrega watermark en diagonal a cada página del PDF en memoria."""
