@@ -296,7 +296,6 @@ document.addEventListener("DOMContentLoaded", function () {
         badge.style.padding = "0.5em";
 
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g, ""));
-        const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ""));
         const hoy = new Date();
 
         // 🔹 Si la cuota aún no llega → no mostrar nada
@@ -305,23 +304,29 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // 🔹 Calcular días de mora siempre
-        const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
-
-        // 🔹 Obtener última fecha de pago y monto aplicado en ese pago
+        // 🔹 Calcular total aplicado hasta la fecha de vencimiento
+        let totalHastaVencimiento = 0;
         let ultimaFechaPago = null;
-        let montoUltimoPago = 0;
         pagos.forEach(p => {
             const f = parseFecha(p.textContent);
-            if (!ultimaFechaPago || f > ultimaFechaPago) {
-                ultimaFechaPago = f;
-                const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
-                if (match) montoUltimoPago = parseFloat(match[1].replace(/,/g, ""));
-            }
+            const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
+            const montoAplicado = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+
+            if (f <= fechaCuota) totalHastaVencimiento += montoAplicado;
+
+            if (!ultimaFechaPago || f > ultimaFechaPago) ultimaFechaPago = f;
         });
 
-        if (totalAplicado >= montoCuota) {
-            // Pagado completamente
+        // 🔹 Calcular días de mora
+        let diasMora = 0;
+        if (totalHastaVencimiento < montoCuota) {
+            diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+            if (diasMora < 0) diasMora = 0;
+        }
+
+        // 🔹 Determinar estado del badge
+        if (totalHastaVencimiento >= montoCuota) {
+            // Pagado a tiempo o anticipado
             if (ultimaFechaPago && ultimaFechaPago < fechaCuota) {
                 badge.textContent = "Pago anticipado";
                 badge.classList.add("bg-success");
@@ -330,9 +335,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 badge.classList.add("bg-secondary");
             }
         } else {
-            // Incompleto
+            // Incompleto o mora
+            const totalAplicado = Array.from(pagos).reduce((sum, p) => {
+                const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
+                return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
+            }, 0);
+
             const saldoPendiente = montoCuota - totalAplicado;
             badge.innerHTML = `Incompleto<br>($${saldoPendiente.toFixed(2)} pendiente)`;
+
             if (diasMora > 0) {
                 badge.innerHTML += `<br>${diasMora} días de mora`;
                 badge.classList.add("bg-danger");
@@ -344,9 +355,14 @@ document.addEventListener("DOMContentLoaded", function () {
         diasMoraElem.appendChild(badge);
 
         // 🔹 Actualizar último pago completo
-        if (totalAplicado >= montoCuota) {
+        const totalAplicadoHoy = Array.from(pagos).reduce((sum, p) => {
+            const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
+            return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
+        }, 0);
+
+        if (totalAplicadoHoy >= montoCuota) {
             if (!ultimoPagoCompleto || fechaCuota > ultimoPagoCompleto.fecha) {
-                ultimoPagoCompleto = { fecha: fechaCuota, monto: totalAplicado };
+                ultimoPagoCompleto = { fecha: fechaCuota, monto: totalAplicadoHoy };
             }
         }
 
