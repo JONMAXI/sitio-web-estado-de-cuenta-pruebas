@@ -310,19 +310,33 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // 🔹 Procesar pagos: encontrar fecha del último pago aplicado
+        // 🔹 Procesar pagos: obtener pagos aplicados y sus fechas
         let pagosAplicados = [];
         pagos.forEach(p => {
-            const aplicadoMatch = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
-            if (aplicadoMatch) {
+            const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
+            if (match) {
                 pagosAplicados.push({
                     fecha: parseFecha(p.textContent),
-                    monto: parseFloat(aplicadoMatch[1].replace(/,/g,""))
+                    monto: parseFloat(match[1].replace(/,/g,""))
                 });
             }
         });
 
-        pagosAplicados.sort((a,b) => a.fecha - b.fecha); // orden cronológico
+        if (pagosAplicados.length === 0) {
+            // No hay pagos aplicados reconocibles
+            if (fechaCuota > new Date()) {
+                diasMoraElem.textContent = "";
+            } else {
+                const diffDias = Math.floor((new Date() - fechaCuota) / (1000*60*60*24));
+                badge.textContent = diffDias + " días de mora";
+                badge.classList.add("bg-danger");
+                diasMoraElem.appendChild(badge);
+            }
+            return;
+        }
+
+        // 🔹 Calcular suma de pagos y fecha del último pago aplicado
+        pagosAplicados.sort((a,b) => a.fecha - b.fecha);
         const sumaPagos = pagosAplicados.reduce((sum,p)=>sum+p.monto,0);
         const ultimaFechaPago = pagosAplicados[pagosAplicados.length-1].fecha;
 
