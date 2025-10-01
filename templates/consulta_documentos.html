@@ -280,6 +280,33 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
         document.getElementById('loader').style.display = 'none';
     }
 });
+
+// BLOQUEAR CLIC DERECHO
+document.addEventListener('contextmenu', function(e){
+    e.preventDefault();
+    Swal.fire({
+        icon: 'info',
+        title: 'Acción no permitida',
+        text: 'No se permite guardar imágenes o abrir menú contextual.'
+    });
+});
+
+// BLOQUEAR CTRL+S, CTRL+P, CTRL+U
+document.addEventListener('keydown', function(e){
+    if(e.ctrlKey){
+        const blocked = ['s','S','p','P','u','U'];
+        if(blocked.includes(e.key)){
+            e.preventDefault();
+            Swal.fire({
+                icon: 'info',
+                title: 'Acción no permitida',
+                text: 'No se permite guardar o imprimir este contenido.'
+            });
+        }
+    }
+});
+
+
 </script>
 </body>
 </html>
