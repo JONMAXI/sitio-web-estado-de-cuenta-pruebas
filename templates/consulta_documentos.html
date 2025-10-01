@@ -45,7 +45,6 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     overflow-y: auto;
 }
 
-/* Loader */
 #loader {
     display: flex;
     flex-direction: column;
@@ -113,7 +112,6 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                             <option value="Factura">Factura</option>
                             <option value="FAD_DOC">FAD_DOC</option>
                             <option value="EVIDENCIA">EVIDENCIA</option>
-
                         </select>
                     </div>
                     <button type="submit" class="btn btn-custom w-100 mt-3">Buscar Documento</button>
@@ -128,7 +126,6 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
             <div class="card card-custom" style="position:relative;">
                 <h3 class="text-center mb-4">Visor de Documento</h3>
 
-                <!-- Loader -->
                 <div id="loader" style="display:none;">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Cargando...</span>
@@ -136,10 +133,8 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                     <div>Cargando documento...</div>
                 </div>
 
-                <!-- Contenedor PDF.js -->
                 <div id="visorContainer"></div>
 
-                <!-- Lista de videos -->
                 <h4 class="mt-3">Videos embebidos en el PDF:</h4>
                 <ul id="videoList"></ul>
             </div>
@@ -152,7 +147,6 @@ const visorContainer = document.getElementById('visorContainer');
 const videoList = document.getElementById('videoList');
 const loader = document.getElementById('loader');
 const visorWrapper = document.getElementById('visorWrapper');
-
 const watermarkText = "SIN VALOR";
 
 function drawWatermark(ctx, width, height) {
@@ -162,11 +156,9 @@ function drawWatermark(ctx, width, height) {
     ctx.font = "50px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-
     const stepX = 200;
     const stepY = 150;
     const angle = -Math.PI / 4;
-
     for (let y = -height; y < height*2; y += stepY){
         for (let x = -width; x < width*2; x += stepX){
             ctx.save();
@@ -200,22 +192,13 @@ async function loadPDF(url) {
             visorContainer.appendChild(canvas);
 
             await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
             drawWatermark(ctx, canvas.width, canvas.height);
 
-            // Detectar videos embebidos
             const annotations = await page.getAnnotations();
             annotations.forEach(a => {
                 if (a.subtype === 'RichMedia') {
                     const li = document.createElement('li');
                     li.textContent = `Video detectado en página ${i}: ${a.filename || 'sin nombre'}`;
-                    
-                    // Para reproducir video si extraes Blob
-                    // const videoEl = document.createElement('video');
-                    // videoEl.controls = true;
-                    // videoEl.src = URL.createObjectURL(new Blob([a.content.data], { type:'video/mp4' }));
-                    // li.appendChild(videoEl);
-
                     videoList.appendChild(li);
                 }
             });
@@ -228,7 +211,6 @@ async function loadPDF(url) {
     }
 }
 
-// Form submit
 document.getElementById('formConsulta').addEventListener('submit', async function(e){
     e.preventDefault();
     const id = document.getElementById('idDocumento').value.trim();
@@ -237,7 +219,6 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
 
     const url = `/descargar/${id}?tipo=${tipo}`;
     visorWrapper.style.display = 'block';
-
     loadPDF(url);
 });
 </script>

@@ -11,6 +11,7 @@ from db_queries import obtener_datos_cliente
 from db_queries import DB3_NAME
 import mimetypes
 import urllib.parse
+import fitz  # pip install PyMuPDF
 
 app = Flask(__name__)
 app.secret_key = 'clave_super_secreta'
@@ -364,12 +365,15 @@ def documentos():
         return redirect('/login')
     return render_template("consulta_documentos.html")
 
-# ------------------ DESCARGA DE DOCUMENTOS ------------------
-# ------------------ DESCARGA DE DOCUMENTOS ------------------
 def _content_disposition_inline(filename: str) -> str:
     q = urllib.parse.quote(filename)
     return f'inline; filename="{filename}"; filename*=UTF-8\'\'{q}'
 
+def auditar_documento(usuario, tipo, descripcion, id_doc, exito, mensaje):
+    # tu función de auditoría
+    pass
+
+# ---------------------------------------------------------------
 @app.route('/descargar/<id>')
 def descargar(id):
     if 'usuario' not in session:
@@ -381,81 +385,18 @@ def descargar(id):
     try:
         # ------------------ INE ------------------
         if tipo == 'INE':
-            fecha_corte = datetime.now().strftime("%Y-%m-%d")
-            payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
-            headers = {"Token": TOKEN, "Content-Type": "application/json"}
-            res = requests.post(ENDPOINT, json=payload, headers=headers, timeout=10)
-            data = res.json() if res.ok else None
-
-            if not data or "estadoCuenta" not in data:
-                auditar_documento(usuario, "INE", "INE completo", id, 0, "Crédito no encontrado o sin datosCliente")
-                return "Crédito no encontrado o sin datosCliente", 404
-
-            idCliente = data["estadoCuenta"].get("datosCliente", {}).get("idCliente")
-            if not idCliente:
-                auditar_documento(usuario, "INE", "INE completo", id, 0, "No se encontró idCliente")
-                return "No se encontró idCliente para este crédito", 404
-
-            urls = [
-                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg",
-                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
-            ]
-            imgs = []
-            faltantes = []
-            for idx, url in enumerate(urls):
-                r = requests.get(url, timeout=10)
-                if r.status_code != 200:
-                    faltantes.append("Frente" if idx == 0 else "Reverso")
-                else:
-                    imgs.append(Image.open(BytesIO(r.content)).convert("RGB"))
-
-            if faltantes:
-                auditar_documento(usuario, "INE", "INE completo", id, 0, f"No se encontraron los archivos: {', '.join(faltantes)}")
-                return f"No se encontraron los archivos: {', '.join(faltantes)}", 404
-
-            pdf_bytes = BytesIO()
-            imgs[0].info['dpi'] = (150, 150)
-            if len(imgs) > 1:
-                imgs[1].info['dpi'] = (150, 150)
-                imgs[0].save(pdf_bytes, format='PDF', save_all=True, append_images=[imgs[1]])
-            else:
-                imgs[0].save(pdf_bytes, format='PDF')
-            pdf_bytes.seek(0)
-            pdf_data = pdf_bytes.read()
-            pdf_bytes.close()
-            for img in imgs:
-                img.close()
-
-            auditar_documento(usuario, "INE", "INE completo", id, 1, None)
-            filename = f"{id}_INE.pdf"
-            return Response(pdf_data, mimetype='application/pdf',
-                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+            # --- tu código existente de INE ---
+            pass
 
         # ------------------ Factura ------------------
         elif tipo == 'Factura':
-            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
-            r = requests.get(url, timeout=10)
-            if r.status_code != 200:
-                auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
-                return "Archivo CEP no encontrado", 404
-
-            auditar_documento(usuario, "Factura", "Factura completo", id, 1, None)
-            filename = f"{id}_factura.pdf"
-            return Response(r.content, mimetype='application/pdf',
-                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+            # --- tu código existente de Factura ---
+            pass
 
         # ------------------ Contrato ------------------
         elif tipo == 'Contrato':
-            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
-            r = requests.get(url, timeout=10)
-            if r.status_code != 200:
-                auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 0, "Cliente no encontrado en la Base de Datos")
-                return "Cliente no encontrado en la Base de Datos", 404
-
-            auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 1, None)
-            filename = f"{id}_validaciones.pdf"
-            return Response(r.content, mimetype='application/pdf',
-                            headers={"Content-Disposition": _content_disposition_inline(filename)})
+            # --- tu código existente de Contrato ---
+            pass
 
         # ------------------ FAD_DOC / EVIDENCIA ------------------
         elif tipo in ('FAD_DOC', 'EVIDENCIA'):
@@ -503,6 +444,24 @@ def descargar(id):
 
             # PDF directo
             if ext == '.pdf':
+                # --- NUEVO BLOQUE: extraer videos embebidos ---
+                videos = []
+                try:
+                    pdf_bytes = BytesIO(r.content)
+                    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    for page in doc:
+                        for annot in page.annots() or []:
+                            if annot.type[0] == 21:  # RichMedia
+                                filename = annot.info.get("filename", "video.mp4")
+                                videos.append(filename)
+                    doc.close()
+
+                    if request.args.get("listar_videos") == "1":
+                        return jsonify({"videos": videos})
+                except Exception as e:
+                    print(f"Error al extraer videos: {e}")
+                # --- FIN BLOQUE NUEVO ---
+
                 auditar_documento(usuario, tipo, tipo, id, 1, None)
                 return Response(r.content, mimetype='application/pdf',
                                 headers={"Content-Disposition": _content_disposition_inline(safe_name)})
@@ -541,7 +500,6 @@ def descargar(id):
     except Exception as e:
         auditar_documento(usuario, tipo, tipo, id, 0, f"Error interno: {e}")
         return "Cliente no encontrado en la Base de Datos", 500
-
 
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
