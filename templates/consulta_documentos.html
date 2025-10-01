@@ -7,13 +7,6 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<!-- PDF.js -->
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.10.111/build/pdf.min.js"></script>
-<script>
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.10.111/build/pdf.worker.min.js';
-</script>
-
 <style>
 body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-serif; }
 
@@ -42,7 +35,22 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
     position: relative;
     min-height: 400px;
     max-height: 80vh;
-    overflow-y: auto;
+}
+
+/* Iframe PDF */
+#pdfFrame {
+    width: 100%;
+    height: 80vh;
+    border:1px solid #ccc;
+}
+
+/* Canvas para marca de agua */
+#watermarkCanvas {
+    position: absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    pointer-events: none; /* permite interacción con videos */
 }
 
 /* Loader */
@@ -112,7 +120,6 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                             <option value="Contrato">Contrato</option>
                             <option value="Factura">Factura</option>
                             <option value="FAD_DOC">FAD_DOC</option>
-                            <option value="EVIDENCIA">EVIDENCIA</option>
                         </select>
                     </div>
                     <button type="submit" class="btn btn-custom w-100 mt-3">Buscar Documento</button>
@@ -123,7 +130,7 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
 
     <!-- Visor de Documento -->
     <div class="row justify-content-center">
-        <div class="col-12" id="visorWrapper" style="display:none;">
+        <div class="col-12" id="visorContainer" style="display:none;">
             <div class="card card-custom" style="position:relative;">
                 <h3 class="text-center mb-4">Visor de Documento</h3>
 
@@ -135,96 +142,45 @@ body { background-color: #f8f9fa; margin:0; padding:0; font-family: Arial, sans-
                     <div>Cargando documento...</div>
                 </div>
 
-                <!-- Contenedor PDF.js -->
-                <div id="visorContainer"></div>
-
-                <!-- Lista de videos -->
-                <h4 class="mt-3">Videos embebidos en el PDF:</h4>
-                <ul id="videoList"></ul>
+                <!-- Iframe PDF con sandbox -->
+                <iframe id="pdfFrame" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+                <canvas id="watermarkCanvas"></canvas>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-const visorContainer = document.getElementById('visorContainer');
-const videoList = document.getElementById('videoList');
-const loader = document.getElementById('loader');
-const visorWrapper = document.getElementById('visorWrapper');
+const iframe = document.getElementById('pdfFrame');
+const canvas = document.getElementById('watermarkCanvas');
+const ctx = canvas.getContext('2d');
+let scale = 1.0;
 
-const watermarkText = "SIN VALOR";
+// Dibuja la marca de agua
+function drawWatermark() {
+    const rect = iframe.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-function drawWatermark(ctx, width, height) {
-    ctx.save();
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = "red";
-    ctx.font = "50px Arial";
+    ctx.font = `${50 * scale}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    const stepX = 200;
-    const stepY = 150;
+    const stepX = 200 * scale;
+    const stepY = 150 * scale;
     const angle = -Math.PI / 4;
 
-    for (let y = -height; y < height*2; y += stepY){
-        for (let x = -width; x < width*2; x += stepX){
+    for(let y=-canvas.height; y<canvas.height*2; y+=stepY){
+        for(let x=-canvas.width; x<canvas.width*2; x+=stepX){
             ctx.save();
-            ctx.translate(x + stepX/2, y + stepY/2);
+            ctx.translate(x+stepX/2, y+stepY/2);
             ctx.rotate(angle);
-            ctx.fillText(watermarkText, 0, 0);
+            ctx.fillText("SIN VALOR",0,0);
             ctx.restore();
         }
-    }
-    ctx.restore();
-}
-
-async function loadPDF(url, id, tipo) {
-    loader.style.display = 'flex';
-    visorContainer.innerHTML = '';
-    videoList.innerHTML = '';
-
-    try {
-        const loadingTask = pdfjsLib.getDocument(url);
-        const pdf = await loadingTask.promise;
-        const numPages = pdf.numPages;
-
-        for (let i = 1; i <= numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.5 });
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            visorContainer.appendChild(canvas);
-
-            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-            drawWatermark(ctx, canvas.width, canvas.height);
-        }
-
-        // ----------------- Obtener lista de videos embebidos -----------------
-        const res = await fetch(`/videos/${id}?tipo=${tipo}`);
-        if (res.ok) {
-            const videos = await res.json();
-            if (videos.length === 0) {
-                videoList.innerHTML = "<li>No se detectaron videos embebidos.</li>";
-            } else {
-                videos.forEach(v => {
-                    const li = document.createElement('li');
-                    li.textContent = `Página ${v.pagina}: ${v.nombre}`;
-                    videoList.appendChild(li);
-                });
-            }
-        } else {
-            const err = await res.json();
-            videoList.innerHTML = `<li>Error al listar videos: ${err.error}</li>`;
-        }
-
-    } catch (err) {
-        Swal.fire({ icon:'error', title:'Error', text: err.message });
-        visorWrapper.style.display = 'none';
-    } finally {
-        loader.style.display = 'none';
     }
 }
 
@@ -235,8 +191,37 @@ document.getElementById('formConsulta').addEventListener('submit', async functio
     const tipo = document.getElementById('tipoDocumento').value;
     if(!id) return;
 
-    visorWrapper.style.display = 'block';
-    loadPDF(`/descargar/${id}?tipo=${tipo}`, id, tipo);
+    const url = `/descargar/${id}?tipo=${tipo}`;
+    document.getElementById('loader').style.display = 'flex';
+    document.getElementById('visorContainer').style.display = 'block';
+
+    try {
+        // Render PDF en iframe
+        iframe.src = url;
+
+        // Cuando se carga, dibuja marca de agua
+        iframe.onload = () => {
+            document.getElementById('loader').style.display = 'none';
+            drawWatermark();
+        };
+
+        // Interceptar clics en enlaces dentro del PDF para abrirlos (videos)
+        iframe.addEventListener('load', () => {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                const links = doc.querySelectorAll('a');
+                links.forEach(link => {
+                    link.setAttribute('target','_blank'); // abrir en nueva pestaña
+                });
+            } catch(e){
+                // Cross-origin PDFs no permiten manipular DOM, pero los enlaces siguen funcionando
+            }
+        });
+
+    } catch(err){
+        Swal.fire({ icon:'error', title:'Error', text: err.message });
+        document.getElementById('visorContainer').style.display = 'none';
+    }
 });
 </script>
 </body>
