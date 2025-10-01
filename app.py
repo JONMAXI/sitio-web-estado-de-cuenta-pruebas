@@ -379,6 +379,7 @@ def descargar(id):
     usuario = session['usuario']['username']
 
     try:
+        # ------------------ INE ------------------
         if tipo == 'INE':
             fecha_corte = datetime.now().strftime("%Y-%m-%d")
             payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
@@ -420,12 +421,17 @@ def descargar(id):
             else:
                 imgs[0].save(pdf_bytes, format='PDF')
             pdf_bytes.seek(0)
+            pdf_data = pdf_bytes.read()
+            pdf_bytes.close()
+            for img in imgs:
+                img.close()
 
             auditar_documento(usuario, "INE", "INE completo", id, 1, None)
             filename = f"{id}_INE.pdf"
-            return Response(pdf_bytes.read(), mimetype='application/pdf',
+            return Response(pdf_data, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
 
+        # ------------------ Factura ------------------
         elif tipo == 'Factura':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
             r = requests.get(url, timeout=10)
@@ -438,6 +444,7 @@ def descargar(id):
             return Response(r.content, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
 
+        # ------------------ Contrato ------------------
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
             r = requests.get(url, timeout=10)
@@ -450,6 +457,7 @@ def descargar(id):
             return Response(r.content, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
 
+        # ------------------ FAD_DOC / EVIDENCIA ------------------
         elif tipo in ('FAD_DOC', 'EVIDENCIA'):
             tabla_db = "oferta_documentos" if tipo == "FAD_DOC" else "evidencia_documentos"
             columna_fk = "fk_oferta" if tipo == "FAD_DOC" else "fk_credito"
@@ -493,11 +501,13 @@ def descargar(id):
 
             _, ext = os.path.splitext(safe_name.lower())
 
+            # PDF directo
             if ext == '.pdf':
                 auditar_documento(usuario, tipo, tipo, id, 1, None)
                 return Response(r.content, mimetype='application/pdf',
                                 headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
+            # Imagen -> PDF
             elif ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'):
                 try:
                     img = Image.open(BytesIO(r.content)).convert("RGB")
@@ -505,14 +515,19 @@ def descargar(id):
                     pdf_bytes = BytesIO()
                     img.save(pdf_bytes, format='PDF')
                     pdf_bytes.seek(0)
+                    pdf_data = pdf_bytes.read()
+                    pdf_bytes.close()
+                    img.close()
+
                     auditar_documento(usuario, tipo, tipo, id, 1, None)
                     filename = os.path.splitext(safe_name)[0] + '.pdf'
-                    return Response(pdf_bytes.read(), mimetype='application/pdf',
+                    return Response(pdf_data, mimetype='application/pdf',
                                     headers={"Content-Disposition": _content_disposition_inline(filename)})
                 except Exception as e:
                     auditar_documento(usuario, tipo, tipo, id, 0, f"Error al convertir imagen a PDF: {e}")
                     return "Error al procesar el archivo", 500
 
+            # Otros tipos
             else:
                 ctype = r.headers.get('Content-Type') or mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
                 auditar_documento(usuario, tipo, tipo, id, 1, None)
@@ -526,6 +541,7 @@ def descargar(id):
     except Exception as e:
         auditar_documento(usuario, tipo, tipo, id, 0, f"Error interno: {e}")
         return "Cliente no encontrado en la Base de Datos", 500
+
 
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
