@@ -475,11 +475,20 @@ def descargar(id):
                 auditar_documento(usuario, tipo, tipo, id, 0, "ID inválido")
                 return "ID inválido", 400
 
-            sql = f"""
-            SELECT nombre_archivo
-            FROM {tabla_db}
-            WHERE {"tipo_documento = 'FAD' AND fk_oferta = %s" if tipo=='FAD_DOC' else "fk_credito = %s"}
-            """
+            # ---------- CORRECCIÓN DE LA CONSULTA SQL ----------
+            if tipo == 'FAD_DOC':
+                sql = f"""
+                SELECT nombre_archivo
+                FROM {tabla_db}
+                WHERE tipo_documento = 'FAD' AND fk_oferta = %s
+                """
+            elif tipo == 'EVIDENCIA':
+                sql = f"""
+                SELECT nombre_archivo
+                FROM {tabla_db}
+                WHERE tipo_documento = 'EVIDENCIA' AND fk_credito = %s
+                """
+
             with get_connection(database=DB3_NAME, use_rds=True) as conn:
                 if not conn:
                     auditar_documento(usuario, tipo, tipo, id, 0, "No se pudo conectar a la DB")
