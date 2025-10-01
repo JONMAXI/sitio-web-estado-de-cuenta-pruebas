@@ -272,19 +272,38 @@ document.addEventListener("DOMContentLoaded", function () {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    let ultimoPagoCompleto = null;
-
     function parseFecha(fechaStr) {
         const parts = fechaStr.trim().split(/[- :]/);
         return new Date(parts[0], parts[1]-1, parts[2], parts[3]||0, parts[4]||0, parts[5]||0);
     }
 
-    document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function (row) {
+    let acumuladoGlobal = 0; // Total de pagos disponibles para aplicar
+    let pagosGlobales = [];   // Array de todos los pagos con fecha y aplicado
+
+    // Primero, recorremos todas las filas y recopilamos todos los pagos en orden
+    document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(row => {
+        const pagosElems = row.querySelectorAll(".fecha-pago");
+        pagosElems.forEach(p => {
+            const aplicadoMatch = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
+            const aplicado = aplicadoMatch ? parseFloat(aplicadoMatch[1].replace(/,/g,"")) : 0;
+            const fecha = parseFecha(p.textContent);
+            pagosGlobales.push({ fecha: fecha, aplicado: aplicado });
+        });
+    });
+
+    // Ordenamos todos los pagos globales por fecha
+    pagosGlobales.sort((a,b) => a.fecha - b.fecha);
+
+    let indicePago = 0; // Índice de pago global
+    let ultimoPagoCompleto = null;
+    const hoy = new Date();
+
+    // Ahora procesamos cuota por cuota
+    document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(row => {
         const fechaCuotaElem = row.querySelector(".fecha-cuota");
         if (!fechaCuotaElem) return;
 
         const fechaCuota = parseFecha(fechaCuotaElem.textContent);
-        const pagosElems = row.querySelectorAll(".fecha-pago");
         const diasMoraElem = row.querySelector(".dias-mora");
         diasMoraElem.innerHTML = "";
 
@@ -295,41 +314,29 @@ document.addEventListener("DOMContentLoaded", function () {
         badge.style.padding = "0.5em";
 
         const montoCuota = parseFloat(row.cells[2].textContent.replace(/[$,]/g,""));
-        const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g,""));
-        const hoy = new Date();
-
-        if (pagosElems.length === 0) {
-            if (fechaCuota > hoy) {
-                diasMoraElem.textContent = "";
-            } else {
-                let diffDias = Math.floor((hoy - fechaCuota) / (1000*60*60*24));
-                if (diffDias < 0) diffDias = 0;
-                badge.textContent = diffDias + " días de mora";
-                badge.classList.add("bg-danger");
-                diasMoraElem.appendChild(badge);
-            }
-            return;
-        }
-
-        // 🔹 Procesar pagos completos acumulados
-        let pagosOrdenados = Array.from(pagosElems).map(p => {
-            const aplicadoMatch = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
-            const aplicado = aplicadoMatch ? parseFloat(aplicadoMatch[1].replace(/,/g,"")) : 0;
-            return { fecha: parseFecha(p.textContent), aplicado: aplicado };
-        }).sort((a,b) => a.fecha - b.fecha);
-
-        let totalAcumulado = 0;
+        let totalAplicadoCuota = 0;
         let fechaPagoCompleto = null;
 
-        for (let p of pagosOrdenados) {
-            totalAcumulado += p.aplicado;
-            if (totalAcumulado >= montoCuota && !fechaPagoCompleto) {
-                fechaPagoCompleto = p.fecha;
+        // Aplicar pagos acumulados globales a esta cuota
+        while (indicePago < pagosGlobales.length && totalAplicadoCuota < montoCuota) {
+            const pago = pagosGlobales[indicePago];
+            let restanteCuota = montoCuota - totalAplicadoCuota;
+            let aplicado = Math.min(restanteCuota, pago.aplicado);
+
+            totalAplicadoCuota += aplicado;
+            pago.aplicado -= aplicado;
+
+            if (totalAplicadoCuota >= montoCuota && !fechaPagoCompleto) {
+                fechaPagoCompleto = pago.fecha;
             }
+
+            // Solo avanzamos al siguiente pago si este se agotó
+            if (pago.aplicado <= 0) indicePago++;
         }
 
+        // Determinar badge de mora
         if (fechaPagoCompleto) {
-            let diffDias = Math.floor((fechaPagoCompleto - fechaCuota) / (1000*60*60*24));
+            const diffDias = Math.floor((fechaPagoCompleto - fechaCuota)/(1000*60*60*24));
             if (diffDias < 0) {
                 badge.textContent = "Pago anticipado";
                 badge.classList.add("bg-success");
@@ -341,17 +348,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 badge.classList.add("bg-danger");
             }
 
-            // Actualizar último pago completo global
             if (!ultimoPagoCompleto || fechaCuota > ultimoPagoCompleto.fecha) {
                 ultimoPagoCompleto = { fecha: fechaCuota, monto: montoCuota };
             }
 
         } else {
-            // Cuota incompleta
-            const saldoPendiente = montoCuota - totalAcumulado;
+            const saldoPendiente = montoCuota - totalAplicadoCuota;
             badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
             if (hoy > fechaCuota) {
-                let diffDias = Math.floor((hoy - fechaCuota) / (1000*60*60*24));
+                const diffDias = Math.floor((hoy - fechaCuota)/(1000*60*60*24));
                 badge.innerHTML += "<br>" + diffDias + " días de mora";
                 badge.classList.add("bg-danger");
             } else {
@@ -361,7 +366,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         diasMoraElem.appendChild(badge);
 
-    }); // fin foreach filas
+    });
 
     // Mostrar último pago completo
     const tdUltimoPago = document.getElementById("ultimo-pago-completo");
