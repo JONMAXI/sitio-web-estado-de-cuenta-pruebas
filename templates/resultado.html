@@ -274,7 +274,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let ultimoPagoCompleto = null;
 
-    // Función para parsear fechas tipo "YYYY-MM-DD HH:MM:SS"
     function parseFecha(fechaStr) {
         const parts = fechaStr.trim().split(/[- :]/);
         return new Date(parts[0], parts[1]-1, parts[2], parts[3]||0, parts[4]||0, parts[5]||0);
@@ -299,10 +298,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // 🔹 Caso sin pagos
         if (pagos.length === 0) {
-            if (fechaCuota > new Date()) {
+            const hoy = new Date();
+            if (fechaCuota > hoy) {
                 diasMoraElem.textContent = "";
             } else {
-                const diffDias = Math.floor((new Date() - fechaCuota) / (1000*60*60*24));
+                const diffDias = Math.floor((hoy - fechaCuota)/(1000*60*60*24));
                 badge.textContent = diffDias + " días de mora";
                 badge.classList.add("bg-danger");
                 diasMoraElem.appendChild(badge);
@@ -310,7 +310,7 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // 🔹 Procesar pagos: obtener pagos aplicados y sus fechas
+        // 🔹 Procesar pagos aplicados
         let pagosAplicados = [];
         pagos.forEach(p => {
             const match = p.textContent.match(/Aplicado:\s*\$([\d,.]+)/);
@@ -322,12 +322,13 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
+        const hoy = new Date();
         if (pagosAplicados.length === 0) {
-            // No hay pagos aplicados reconocibles
-            if (fechaCuota > new Date()) {
+            // Solo pagos no aplicados
+            if (fechaCuota > hoy) {
                 diasMoraElem.textContent = "";
             } else {
-                const diffDias = Math.floor((new Date() - fechaCuota) / (1000*60*60*24));
+                const diffDias = Math.floor((hoy - fechaCuota)/(1000*60*60*24));
                 badge.textContent = diffDias + " días de mora";
                 badge.classList.add("bg-danger");
                 diasMoraElem.appendChild(badge);
@@ -335,13 +336,13 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // 🔹 Calcular suma de pagos y fecha del último pago aplicado
-        pagosAplicados.sort((a,b) => a.fecha - b.fecha);
+        // 🔹 Cuota completa o incompleta
+        pagosAplicados.sort((a,b)=>a.fecha - b.fecha);
         const sumaPagos = pagosAplicados.reduce((sum,p)=>sum+p.monto,0);
         const ultimaFechaPago = pagosAplicados[pagosAplicados.length-1].fecha;
 
         if (sumaPagos >= montoCuota) {
-            // Cuota completada
+            // Cuota completa → días de mora desde fecha de vencimiento hasta última fecha de pago
             const diffDias = Math.floor((ultimaFechaPago - fechaCuota)/(1000*60*60*24));
             if (diffDias <= 0) {
                 badge.textContent = "Sin mora";
@@ -359,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
             // Cuota incompleta
             const faltante = montoCuota - sumaPagos;
-            const diffDias = Math.floor((new Date() - fechaCuota)/(1000*60*60*24));
+            const diffDias = Math.floor((hoy - fechaCuota)/(1000*60*60*24));
             if (diffDias <= 0) {
                 badge.textContent = `Incompleto sin mora ($${faltante.toFixed(2)} pendiente)`;
                 badge.classList.add("bg-warning");
