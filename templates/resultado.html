@@ -260,8 +260,7 @@
     <!-- Botones de scroll -->
     <button id="scrollBottomBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬇️</button>
     <button id="scrollTopBtn" class="btn btn-secondary rounded-circle" style="position: fixed; bottom: 90px; right: 30px; width: 50px; height: 50px; z-index: 1000;">⬆️</button>
-
-    <script>
+<script>
 document.addEventListener("DOMContentLoaded", function () {
 
     // Botones de scroll
@@ -274,12 +273,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let ultimoPagoCompleto = null;
 
-    // 🔹 Función para parsear fecha tipo "YYYY-MM-DD"
+    // 🔹 Función para parsear fecha tipo "YYYY-MM-DD HH:MM:SS"
     function parseFecha(fechaStr) {
         const parts = fechaStr.trim().split(/[- :]/);
         return new Date(parts[0], parts[1] - 1, parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0);
     }
 
+    // 🔹 Recorrer cada fila de la tabla
     document.querySelectorAll("table.table-bordered.table-striped tbody tr").forEach(function (row) {
         const fechaCuotaElem = row.querySelector(".fecha-cuota");
         if (!fechaCuotaElem) return;
@@ -302,16 +302,15 @@ document.addEventListener("DOMContentLoaded", function () {
         // 🔹 Casos sin pagos
         if (pagos.length === 0) {
             if (fechaCuota > hoy) {
-                diasMoraElem.textContent = "";
+                badge.textContent = "Pendiente";
+                badge.classList.add("bg-warning");
             } else {
-                const fechaVencida = new Date(fechaCuota);
-                fechaVencida.setDate(fechaVencida.getDate() + 1);
-                let diffDias = Math.floor((hoy - fechaVencida) / (1000 * 60 * 60 * 24));
-                if (diffDias < 0) diffDias = 0;
-                badge.textContent = diffDias + " días de mora";
+                const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+                badge.innerHTML = "Incompleto<br>($" + montoCuota.toFixed(2) + " pendiente)<br>" +
+                                  diasMora + " días de mora";
                 badge.classList.add("bg-danger");
-                diasMoraElem.appendChild(badge);
             }
+            diasMoraElem.appendChild(badge);
         } else {
             // 🔹 Si hay pagos
             let ultimaFechaPago = null;
@@ -326,30 +325,28 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             });
 
-            const diffMs = ultimaFechaPago - fechaCuota;
-            const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-            if (diffDias > 0) {
-                badge.textContent = diffDias + " días de mora";
-                badge.classList.add("bg-danger");
-            } else if (diffDias < 0) {
-                if (totalAplicado >= montoCuota) {
+            if (totalAplicado >= montoCuota) {
+                // ✅ Pagado completamente
+                if (ultimaFechaPago < fechaCuota) {
+                    // Pago anticipado
                     badge.textContent = "Pago anticipado";
                     badge.classList.add("bg-success");
                 } else {
-                    const saldoPendiente = montoCuota - totalAplicado;
-                    badge.innerHTML = "Incompleto <br> ($" + saldoPendiente.toFixed(2) + " pendiente)";
-                    badge.classList.add("bg-warning");
-
-                    if (hoy > fechaCuota) {
-                        const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
-                        badge.innerHTML += "<br> " + diasMora + " días de mora";
-                        badge.classList.replace("bg-warning", "bg-danger");
-                    }
+                    badge.textContent = "Sin mora";
+                    badge.classList.add("bg-secondary");
                 }
             } else {
-                badge.textContent = "Sin mora";
-                badge.classList.add("bg-secondary");
+                // ⚠ Incompleto
+                const saldoPendiente = montoCuota - totalAplicado;
+                badge.innerHTML = "Incompleto<br>($" + saldoPendiente.toFixed(2) + " pendiente)";
+
+                if (hoy > fechaCuota) {
+                    const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+                    badge.innerHTML += "<br>" + diasMora + " días de mora";
+                    badge.classList.add("bg-danger");
+                } else {
+                    badge.classList.add("bg-warning");
+                }
             }
 
             diasMoraElem.appendChild(badge);
@@ -376,8 +373,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 });
-      
-    </script>
+</script>
 
     {% if usuario_no_existe %}
     <script>
