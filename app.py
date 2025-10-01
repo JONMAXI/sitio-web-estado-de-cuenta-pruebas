@@ -362,7 +362,13 @@ def index():
 def documentos():
     if 'usuario' not in session:
         return redirect('/login')
-    return render_template("consulta_documentos.html")
+
+    usuario = session['usuario']['username']
+
+    if usuario in ('admin', 'jon'):
+        return render_template("consulta_documentos_admin.html", usuario=usuario)
+    else:
+        return render_template("consulta_documentos.html", usuario=usuario)
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
