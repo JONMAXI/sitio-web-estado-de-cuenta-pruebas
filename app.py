@@ -365,9 +365,9 @@ def documentos():
     return render_template("consulta_documentos.html")
 
 # ------------------ DESCARGA DE DOCUMENTOS ------------------
+# ------------------ DESCARGA DE DOCUMENTOS ------------------
 def _content_disposition_inline(filename: str) -> str:
     q = urllib.parse.quote(filename)
-    # Incluye ambos para compatibilidad con navegadores
     return f'inline; filename="{filename}"; filename*=UTF-8\'\'{q}'
 
 @app.route('/descargar/<id>')
@@ -395,35 +395,36 @@ def descargar(id):
                 auditar_documento(usuario, "INE", "INE completo", id, 0, "No se encontró idCliente")
                 return "No se encontró idCliente para este crédito", 404
 
-            url_frente = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg"
-            url_reverso = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
-            r1 = requests.get(url_frente, timeout=10)
-            r2 = requests.get(url_reverso, timeout=10)
-
+            urls = [
+                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg",
+                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
+            ]
+            imgs = []
             faltantes = []
-            if r1.status_code != 200:
-                faltantes.append("Frente")
-            if r2.status_code != 200:
-                faltantes.append("Reverso")
+            for idx, url in enumerate(urls):
+                r = requests.get(url, timeout=10)
+                if r.status_code != 200:
+                    faltantes.append("Frente" if idx == 0 else "Reverso")
+                else:
+                    imgs.append(Image.open(BytesIO(r.content)).convert("RGB"))
+
             if faltantes:
                 auditar_documento(usuario, "INE", "INE completo", id, 0, f"No se encontraron los archivos: {', '.join(faltantes)}")
                 return f"No se encontraron los archivos: {', '.join(faltantes)}", 404
 
-            img1 = Image.open(BytesIO(r1.content)).convert("RGB")
-            img2 = Image.open(BytesIO(r2.content)).convert("RGB")
-            img1.info['dpi'] = (150, 150)
-            img2.info['dpi'] = (150, 150)
             pdf_bytes = BytesIO()
-            img1.save(pdf_bytes, format='PDF', save_all=True, append_images=[img2])
+            imgs[0].info['dpi'] = (150, 150)
+            if len(imgs) > 1:
+                imgs[1].info['dpi'] = (150, 150)
+                imgs[0].save(pdf_bytes, format='PDF', save_all=True, append_images=[imgs[1]])
+            else:
+                imgs[0].save(pdf_bytes, format='PDF')
             pdf_bytes.seek(0)
 
             auditar_documento(usuario, "INE", "INE completo", id, 1, None)
             filename = f"{id}_INE.pdf"
-            return Response(
-                pdf_bytes.read(),
-                mimetype='application/pdf',
-                headers={"Content-Disposition": _content_disposition_inline(filename)}
-            )
+            return Response(pdf_bytes.read(), mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         elif tipo == 'Factura':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
@@ -432,7 +433,7 @@ def descargar(id):
                 auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
                 return "Archivo CEP no encontrado", 404
 
-            auditar_documento(usuario, "Factura", " completo", id, 1, None)
+            auditar_documento(usuario, "Factura", "Factura completo", id, 1, None)
             filename = f"{id}_factura.pdf"
             return Response(r.content, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
@@ -449,22 +450,25 @@ def descargar(id):
             return Response(r.content, mimetype='application/pdf',
                             headers={"Content-Disposition": _content_disposition_inline(filename)})
 
-        elif tipo == 'FAD_DOC':
-            # pk_oferta_documentos viene en la ruta <id>
+        elif tipo in ('FAD_DOC', 'EVIDENCIA'):
+            tabla_db = "oferta_documentos" if tipo == "FAD_DOC" else "evidencia_documentos"
+            columna_fk = "fk_oferta" if tipo == "FAD_DOC" else "fk_credito"
+            carpeta_s3 = "FAD" if tipo == "FAD_DOC" else "EVIDENCIA"
+
             try:
                 pk = int(id)
             except ValueError:
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "ID inválido para FAD_DOC")
+                auditar_documento(usuario, tipo, tipo, id, 0, "ID inválido")
                 return "ID inválido", 400
 
-            sql = """
+            sql = f"""
             SELECT nombre_archivo
-            FROM oferta_documentos
-            WHERE tipo_documento = 'FAD' AND fk_oferta = %s
+            FROM {tabla_db}
+            WHERE {"tipo_documento = 'FAD' AND fk_oferta = %s" if tipo=='FAD_DOC' else "fk_credito = %s"}
             """
             with get_connection(database=DB3_NAME, use_rds=True) as conn:
                 if not conn:
-                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "No se pudo conectar a la DB")
+                    auditar_documento(usuario, tipo, tipo, id, 0, "No se pudo conectar a la DB")
                     return "Error de conexión con la base de datos", 500
                 cursor = conn.cursor(dictionary=True)
                 cursor.execute(sql, (pk,))
@@ -472,28 +476,25 @@ def descargar(id):
                 cursor.close()
 
             if not row:
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "Documento no encontrado en la base")
+                auditar_documento(usuario, tipo, tipo, id, 0, "Documento no encontrado en la base")
                 return "Documento no encontrado en la base de datos", 404
 
             nombre_archivo = row.get("nombre_archivo")
             if not nombre_archivo:
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, "El documento no tiene nombre asociado")
+                auditar_documento(usuario, tipo, tipo, id, 0, "El documento no tiene nombre asociado")
                 return "El documento no tiene nombre asociado", 404
 
-            # normalizar/sanitizar el nombre (evita rutas)
             safe_name = os.path.basename(nombre_archivo)
-            # URL S3 con carpeta FAD/
-            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FAD/{urllib.parse.quote(safe_name)}"
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName={carpeta_s3}/{urllib.parse.quote(safe_name)}"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Archivo {safe_name} no encontrado en S3")
+                auditar_documento(usuario, tipo, tipo, id, 0, f"Archivo {safe_name} no encontrado en S3")
                 return "Archivo no encontrado en S3", 404
 
-            # Determinar por extensión
             _, ext = os.path.splitext(safe_name.lower())
 
             if ext == '.pdf':
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                auditar_documento(usuario, tipo, tipo, id, 1, None)
                 return Response(r.content, mimetype='application/pdf',
                                 headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
@@ -504,18 +505,17 @@ def descargar(id):
                     pdf_bytes = BytesIO()
                     img.save(pdf_bytes, format='PDF')
                     pdf_bytes.seek(0)
-                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                    auditar_documento(usuario, tipo, tipo, id, 1, None)
                     filename = os.path.splitext(safe_name)[0] + '.pdf'
                     return Response(pdf_bytes.read(), mimetype='application/pdf',
                                     headers={"Content-Disposition": _content_disposition_inline(filename)})
                 except Exception as e:
-                    auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 0, f"Error al convertir imagen a PDF: {e}")
+                    auditar_documento(usuario, tipo, tipo, id, 0, f"Error al convertir imagen a PDF: {e}")
                     return "Error al procesar el archivo", 500
 
             else:
-                # Tipo desconocido -> intentar usar Content-Type o devolver binario
                 ctype = r.headers.get('Content-Type') or mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
-                auditar_documento(usuario, "FAD_DOC", "FAD_DOC", id, 1, None)
+                auditar_documento(usuario, tipo, tipo, id, 1, None)
                 return Response(r.content, mimetype=ctype,
                                 headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
