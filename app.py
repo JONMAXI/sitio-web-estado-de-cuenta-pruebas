@@ -374,6 +374,11 @@ def auditar_documento(usuario, tipo, descripcion, id_doc, exito, mensaje):
     pass
 
 # ---------------------------------------------------------------
+def _content_disposition_inline(filename: str) -> str:
+    q = urllib.parse.quote(filename)
+    return f'inline; filename="{filename}"; filename*=UTF-8\'\'{q}'
+
+# ------------------ Descargar PDF ------------------
 @app.route('/descargar/<id>')
 def descargar(id):
     if 'usuario' not in session:
@@ -385,18 +390,80 @@ def descargar(id):
     try:
         # ------------------ INE ------------------
         if tipo == 'INE':
-            # --- tu código existente de INE ---
-            pass
+            fecha_corte = datetime.now().strftime("%Y-%m-%d")
+            payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
+            headers = {"Token": TOKEN, "Content-Type": "application/json"}
+            res = requests.post(ENDPOINT, json=payload, headers=headers, timeout=10)
+            data = res.json() if res.ok else None
+            if not data or "estadoCuenta" not in data:
+                auditar_documento(usuario, "INE", "INE completo", id, 0, "Crédito no encontrado o sin datosCliente")
+                return "Crédito no encontrado o sin datosCliente", 404
+
+            idCliente = data["estadoCuenta"].get("datosCliente", {}).get("idCliente")
+            if not idCliente:
+                auditar_documento(usuario, "INE", "INE completo", id, 0, "No se encontró idCliente")
+                return "No se encontró idCliente para este crédito", 404
+
+            urls = [
+                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg",
+                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
+            ]
+            imgs = []
+            faltantes = []
+            for idx, url in enumerate(urls):
+                r = requests.get(url, timeout=10)
+                if r.status_code != 200:
+                    faltantes.append("Frente" if idx == 0 else "Reverso")
+                else:
+                    imgs.append(Image.open(BytesIO(r.content)).convert("RGB"))
+
+            if faltantes:
+                auditar_documento(usuario, "INE", "INE completo", id, 0, f"No se encontraron los archivos: {', '.join(faltantes)}")
+                return f"No se encontraron los archivos: {', '.join(faltantes)}", 404
+
+            pdf_bytes = BytesIO()
+            imgs[0].info['dpi'] = (150, 150)
+            if len(imgs) > 1:
+                imgs[1].info['dpi'] = (150, 150)
+                imgs[0].save(pdf_bytes, format='PDF', save_all=True, append_images=[imgs[1]])
+            else:
+                imgs[0].save(pdf_bytes, format='PDF')
+            pdf_bytes.seek(0)
+            pdf_data = pdf_bytes.read()
+            pdf_bytes.close()
+            for img in imgs:
+                img.close()
+
+            auditar_documento(usuario, "INE", "INE completo", id, 1, None)
+            filename = f"{id}_INE.pdf"
+            return Response(pdf_data, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         # ------------------ Factura ------------------
         elif tipo == 'Factura':
-            # --- tu código existente de Factura ---
-            pass
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                auditar_documento(usuario, "Factura", "Factura", id, 0, "Archivo Factura no encontrado")
+                return "Archivo CEP no encontrado", 404
+
+            auditar_documento(usuario, "Factura", "Factura completo", id, 1, None)
+            filename = f"{id}_factura.pdf"
+            return Response(r.content, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         # ------------------ Contrato ------------------
         elif tipo == 'Contrato':
-            # --- tu código existente de Contrato ---
-            pass
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 0, "Cliente no encontrado en la Base de Datos")
+                return "Cliente no encontrado en la Base de Datos", 404
+
+            auditar_documento(usuario, "Contrato", "Contrato validaciones", id, 1, None)
+            filename = f"{id}_validaciones.pdf"
+            return Response(r.content, mimetype='application/pdf',
+                            headers={"Content-Disposition": _content_disposition_inline(filename)})
 
         # ------------------ FAD_DOC / EVIDENCIA ------------------
         elif tipo in ('FAD_DOC', 'EVIDENCIA'):
@@ -444,47 +511,25 @@ def descargar(id):
 
             # PDF directo
             if ext == '.pdf':
-                # --- NUEVO BLOQUE: extraer videos embebidos ---
-                videos = []
-                try:
-                    pdf_bytes = BytesIO(r.content)
-                    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-                    for page in doc:
-                        for annot in page.annots() or []:
-                            if annot.type[0] == 21:  # RichMedia
-                                filename = annot.info.get("filename", "video.mp4")
-                                videos.append(filename)
-                    doc.close()
-
-                    if request.args.get("listar_videos") == "1":
-                        return jsonify({"videos": videos})
-                except Exception as e:
-                    print(f"Error al extraer videos: {e}")
-                # --- FIN BLOQUE NUEVO ---
-
                 auditar_documento(usuario, tipo, tipo, id, 1, None)
                 return Response(r.content, mimetype='application/pdf',
                                 headers={"Content-Disposition": _content_disposition_inline(safe_name)})
 
             # Imagen -> PDF
             elif ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'):
-                try:
-                    img = Image.open(BytesIO(r.content)).convert("RGB")
-                    img.info['dpi'] = (150, 150)
-                    pdf_bytes = BytesIO()
-                    img.save(pdf_bytes, format='PDF')
-                    pdf_bytes.seek(0)
-                    pdf_data = pdf_bytes.read()
-                    pdf_bytes.close()
-                    img.close()
+                img = Image.open(BytesIO(r.content)).convert("RGB")
+                img.info['dpi'] = (150, 150)
+                pdf_bytes = BytesIO()
+                img.save(pdf_bytes, format='PDF')
+                pdf_bytes.seek(0)
+                pdf_data = pdf_bytes.read()
+                pdf_bytes.close()
+                img.close()
 
-                    auditar_documento(usuario, tipo, tipo, id, 1, None)
-                    filename = os.path.splitext(safe_name)[0] + '.pdf'
-                    return Response(pdf_data, mimetype='application/pdf',
-                                    headers={"Content-Disposition": _content_disposition_inline(filename)})
-                except Exception as e:
-                    auditar_documento(usuario, tipo, tipo, id, 0, f"Error al convertir imagen a PDF: {e}")
-                    return "Error al procesar el archivo", 500
+                auditar_documento(usuario, tipo, tipo, id, 1, None)
+                filename = os.path.splitext(safe_name)[0] + '.pdf'
+                return Response(pdf_data, mimetype='application/pdf',
+                                headers={"Content-Disposition": _content_disposition_inline(filename)})
 
             # Otros tipos
             else:
@@ -500,6 +545,125 @@ def descargar(id):
     except Exception as e:
         auditar_documento(usuario, tipo, tipo, id, 0, f"Error interno: {e}")
         return "Cliente no encontrado en la Base de Datos", 500
+
+
+# ------------------ Listar videos embebidos ------------------
+@app.route('/videos/<id>')
+def listar_videos(id):
+    if 'usuario' not in session:
+        return jsonify({"error": "No autorizado"}), 403
+
+    tipo = request.args.get('tipo', 'FAD_DOC')
+    usuario = session['usuario']['username']
+
+    try:
+        # ------------------ Mismo flujo que /descargar ------------------
+        pdf_bytes = None
+
+        if tipo == 'INE':
+            fecha_corte = datetime.now().strftime("%Y-%m-%d")
+            payload = {"idCredito": int(id), "fechaCorte": fecha_corte}
+            headers = {"Token": TOKEN, "Content-Type": "application/json"}
+            res = requests.post(ENDPOINT, json=payload, headers=headers, timeout=10)
+            data = res.json() if res.ok else None
+            if not data or "estadoCuenta" not in data:
+                return jsonify({"error": "Crédito no encontrado o sin datosCliente"}), 404
+            idCliente = data["estadoCuenta"].get("datosCliente", {}).get("idCliente")
+            if not idCliente:
+                return jsonify({"error": "No se encontró idCliente"}), 404
+            urls = [
+                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg",
+                f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
+            ]
+            imgs = []
+            for url in urls:
+                r = requests.get(url, timeout=10)
+                if r.status_code == 200:
+                    imgs.append(Image.open(BytesIO(r.content)).convert("RGB"))
+            if not imgs:
+                return jsonify({"error": "No se encontraron imágenes para INE"}), 404
+            pdf_buffer = BytesIO()
+            imgs[0].info['dpi'] = (150, 150)
+            if len(imgs) > 1:
+                imgs[1].info['dpi'] = (150, 150)
+                imgs[0].save(pdf_buffer, format='PDF', save_all=True, append_images=[imgs[1]])
+            else:
+                imgs[0].save(pdf_buffer, format='PDF')
+            pdf_buffer.seek(0)
+            pdf_bytes = pdf_buffer.read()
+            pdf_buffer.close()
+            for img in imgs:
+                img.close()
+
+        elif tipo == 'Factura':
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                return jsonify({"error": "Archivo Factura no encontrado"}), 404
+            pdf_bytes = r.content
+
+        elif tipo == 'Contrato':
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                return jsonify({"error": "Contrato no encontrado"}), 404
+            pdf_bytes = r.content
+
+        elif tipo in ('FAD_DOC', 'EVIDENCIA'):
+            tabla_db = "oferta_documentos" if tipo == "FAD_DOC" else "evidencia_documentos"
+            columna_fk = "fk_oferta" if tipo == "FAD_DOC" else "fk_credito"
+            carpeta_s3 = "FAD" if tipo == "FAD_DOC" else "EVIDENCIA"
+            pk = int(id)
+            sql = f"""
+            SELECT nombre_archivo
+            FROM {tabla_db}
+            WHERE {"tipo_documento = 'FAD' AND fk_oferta = %s" if tipo=='FAD_DOC' else "fk_credito = %s"}
+            """
+            with get_connection(database=DB3_NAME, use_rds=True) as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(sql, (pk,))
+                row = cursor.fetchone()
+                cursor.close()
+            if not row:
+                return jsonify({"error": "Documento no encontrado en la base"}), 404
+            safe_name = os.path.basename(row["nombre_archivo"])
+            url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName={carpeta_s3}/{urllib.parse.quote(safe_name)}"
+            r = requests.get(url, timeout=10)
+            if r.status_code != 200:
+                return jsonify({"error": f"Archivo {safe_name} no encontrado en S3"}), 404
+            _, ext = os.path.splitext(safe_name.lower())
+            if ext == '.pdf':
+                pdf_bytes = r.content
+            elif ext in ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'):
+                img = Image.open(BytesIO(r.content)).convert("RGB")
+                img.info['dpi'] = (150, 150)
+                pdf_buffer = BytesIO()
+                img.save(pdf_buffer, format='PDF')
+                pdf_buffer.seek(0)
+                pdf_bytes = pdf_buffer.read()
+                pdf_buffer.close()
+                img.close()
+            else:
+                return jsonify({"error": f"Tipo de archivo {ext} no soportado para extracción de videos"}), 400
+
+        else:
+            return jsonify({"error": "Tipo de documento no válido"}), 400
+
+        # ------------------ Extraer videos embebidos ------------------
+        videos = []
+        pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        for i in range(pdf_doc.page_count):
+            page = pdf_doc[i]
+            for annot in page.annots(types=[fitz.PDF_ANNOT_RICHMEDIA]):
+                videos.append({
+                    "pagina": i+1,
+                    "nombre": getattr(annot, "richmedia_filename", "sin nombre")
+                })
+        pdf_doc.close()
+        return jsonify(videos)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
