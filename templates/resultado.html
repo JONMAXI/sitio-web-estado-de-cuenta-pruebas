@@ -299,7 +299,6 @@ document.addEventListener("DOMContentLoaded", function () {
         const totalAplicado = parseFloat(row.cells[4].textContent.replace(/[$,]/g, ""));
         const hoy = new Date();
 
-        // 🔹 Si hay pagos, determinar última fecha y monto aplicado
         let ultimaFechaPago = null;
         let montoUltimoPago = 0;
         pagos.forEach(p => {
@@ -311,22 +310,18 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
+        const saldoPendiente = montoCuota - totalAplicado;
+
         // 🔹 Casos sin pagos
         if (pagos.length === 0) {
-            if (fechaCuota > hoy) {
-                diasMoraElem.textContent = "";
-            } else {
-                const fechaVencida = new Date(fechaCuota);
-                fechaVencida.setDate(fechaVencida.getDate() + 1);
-                let diffDias = Math.floor((hoy - fechaVencida) / (1000 * 60 * 60 * 24));
-                if (diffDias < 0) diffDias = 0;
-                badge.textContent = diffDias + " días de mora";
+            if (hoy >= fechaCuota && saldoPendiente > 0) {
+                const diasMora = Math.floor((hoy - fechaCuota) / (1000 * 60 * 60 * 24));
+                badge.innerHTML = "$" + saldoPendiente.toFixed(2) + " pendiente<br>" + diasMora + " días de mora";
                 badge.classList.add("bg-danger");
-                diasMoraElem.appendChild(badge);
+            } else {
+                diasMoraElem.textContent = "";
             }
         } else {
-            const saldoPendiente = montoCuota - totalAplicado;
-
             // 🔹 Pagos completos
             if (totalAplicado >= montoCuota) {
                 if (ultimaFechaPago > fechaCuota) {
@@ -352,9 +347,9 @@ document.addEventListener("DOMContentLoaded", function () {
                     badge.classList.add("bg-warning");
                 }
             }
-
-            diasMoraElem.appendChild(badge);
         }
+
+        diasMoraElem.appendChild(badge);
 
         // 🔹 Actualizar último pago completo si la cuota está totalmente pagada
         if (totalAplicado >= montoCuota) {
@@ -377,6 +372,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 });
+
 
       
     </script>
