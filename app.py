@@ -567,10 +567,10 @@ def listar_videos(id):
             res = requests.post(ENDPOINT, json=payload, headers=headers, timeout=10)
             data = res.json() if res.ok else None
             if not data or "estadoCuenta" not in data:
-                return jsonify({"error": "Crédito no encontrado o sin datosCliente"}), 404
+                return jsonify({"videos": [], "error": "Crédito no encontrado o sin datosCliente"}), 404
             idCliente = data["estadoCuenta"].get("datosCliente", {}).get("idCliente")
             if not idCliente:
-                return jsonify({"error": "No se encontró idCliente"}), 404
+                return jsonify({"videos": [], "error": "No se encontró idCliente"}), 404
             urls = [
                 f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_frente.jpeg",
                 f"http://54.167.121.148:8081/s3/downloadS3File?fileName=INE/{idCliente}_reverso.jpeg"
@@ -581,7 +581,7 @@ def listar_videos(id):
                 if r.status_code == 200:
                     imgs.append(Image.open(BytesIO(r.content)).convert("RGB"))
             if not imgs:
-                return jsonify({"error": "No se encontraron imágenes para INE"}), 404
+                return jsonify({"videos": [], "error": "No se encontraron imágenes para INE"}), 404
             pdf_buffer = BytesIO()
             imgs[0].info['dpi'] = (150, 150)
             if len(imgs) > 1:
@@ -599,19 +599,18 @@ def listar_videos(id):
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=FACTURA/{id}_factura.pdf"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
-                return jsonify({"error": "Archivo Factura no encontrado"}), 404
+                return jsonify({"videos": [], "error": "Archivo Factura no encontrado"}), 404
             pdf_bytes = r.content
 
         elif tipo == 'Contrato':
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName=VALIDACIONES/{id}_validaciones.pdf"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
-                return jsonify({"error": "Contrato no encontrado"}), 404
+                return jsonify({"videos": [], "error": "Contrato no encontrado"}), 404
             pdf_bytes = r.content
 
         elif tipo in ('FAD_DOC', 'EVIDENCIA'):
             tabla_db = "oferta_documentos" if tipo == "FAD_DOC" else "evidencia_documentos"
-            columna_fk = "fk_oferta" if tipo == "FAD_DOC" else "fk_credito"
             carpeta_s3 = "FAD" if tipo == "FAD_DOC" else "EVIDENCIA"
             pk = int(id)
             sql = f"""
@@ -625,12 +624,12 @@ def listar_videos(id):
                 row = cursor.fetchone()
                 cursor.close()
             if not row:
-                return jsonify({"error": "Documento no encontrado en la base"}), 404
+                return jsonify({"videos": [], "error": "Documento no encontrado en la base"}), 404
             safe_name = os.path.basename(row["nombre_archivo"])
             url = f"http://54.167.121.148:8081/s3/downloadS3File?fileName={carpeta_s3}/{urllib.parse.quote(safe_name)}"
             r = requests.get(url, timeout=10)
             if r.status_code != 200:
-                return jsonify({"error": f"Archivo {safe_name} no encontrado en S3"}), 404
+                return jsonify({"videos": [], "error": f"Archivo {safe_name} no encontrado en S3"}), 404
             _, ext = os.path.splitext(safe_name.lower())
             if ext == '.pdf':
                 pdf_bytes = r.content
@@ -644,10 +643,9 @@ def listar_videos(id):
                 pdf_buffer.close()
                 img.close()
             else:
-                return jsonify({"error": f"Tipo de archivo {ext} no soportado para extracción de videos"}), 400
-
+                return jsonify({"videos": [], "error": f"Tipo de archivo {ext} no soportado para extracción de videos"}), 400
         else:
-            return jsonify({"error": "Tipo de documento no válido"}), 400
+            return jsonify({"videos": [], "error": "Tipo de documento no válido"}), 400
 
         # ------------------ Extraer videos embebidos ------------------
         videos = []
@@ -660,11 +658,10 @@ def listar_videos(id):
                     "nombre": getattr(annot, "richmedia_filename", "sin nombre")
                 })
         pdf_doc.close()
-        return jsonify(videos)
+        return jsonify({"videos": videos})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"videos": [], "error": str(e)}), 500
 # ------------------ INICIO ------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
