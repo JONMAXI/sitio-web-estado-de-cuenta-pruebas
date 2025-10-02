@@ -465,7 +465,7 @@ def descargar(id):
 
         # ------------------ FAD_DOC / EVIDENCIA ------------------
         elif tipo in ('FAD_DOC', 'EVIDENCIA'):
-            tabla_db = "oferta_documentos" if tipo == "FAD_DOC" else "evidencia_documentos"
+            tabla_db = "oferta_documentos" if tipo == "FAD_DOC" else "oferta_documentos"
             columna_fk = "fk_oferta" if tipo == "FAD_DOC" else "fk_credito"
             carpeta_s3 = "FAD" if tipo == "FAD_DOC" else "EVIDENCIA"
 
